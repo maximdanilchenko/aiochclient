@@ -1,5 +1,5 @@
 # aiochclient
-### Async http clickhouse client for python 3.6+ with types converting and streaming support
+### Async http(s) clickhouse client for python 3.6+ with response types converting and streaming support
 
 
 ## Quick start
@@ -31,6 +31,10 @@ Async iteration on query results steam:
 async for row in client.cursor(
     "SELECT number, number*2 as double FROM system.numbers LIMIT 10000"
 ):
-    assert row.number * 2 == row.double
+    assert row[0] * 2 == row[1]
 ```
-`ChClient` returns rows as `namedtuple`s
+`AioChClient` returns rows as `tuple`s
+
+## Connection pool size
+
+If you use `aiochclient` in web apps, you can limit connection pool size with [aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size).

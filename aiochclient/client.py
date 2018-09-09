@@ -1,6 +1,7 @@
 from typing import List, AsyncGenerator
 from aiohttp import client
-from aiochclient.records import RecordFabric
+from aiochclient.records import RecordsFabric
+from aiochclient.exceptions import AioChClientError
 
 
 class AioChClient:
@@ -32,16 +33,14 @@ class AioChClient:
             return resp.status == 200
 
     async def cursor(self, query: str) -> AsyncGenerator:
-        assert query.lstrip().startswith(
-            "SELECT"
-        ), "Query for fetching should starts with 'SELECT'"
+        if not query.lstrip().startswith("SELECT"):
+            raise AioChClientError("Query for fetching should starts with 'SELECT'")
         query += " FORMAT TSVWithNamesAndTypes"
         async with self._session.post(
             self.url, params=self.params, data=query.encode()
         ) as resp:  # type: client.ClientResponse
-            rf = RecordFabric(
-                names=await resp.content.readline(), tps=await resp.content.readline()
-            )
+            await resp.content.readline()
+            rf = RecordsFabric(await resp.content.readline())
             async for line in resp.content:
                 yield rf.new(line)
 
