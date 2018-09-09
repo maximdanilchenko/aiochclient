@@ -1,5 +1,5 @@
 # aiochclient
-### Async http(s) clickhouse client for python 3.6+ with response types converting and streaming support
+### Async http(s) clickhouse client for python 3.6+ with types converting and streaming support
 
 
 ## Quick start
