@@ -3,7 +3,7 @@ from aiohttp import client
 from aiochclient.records import RecordFabric
 
 
-class ChClient:
+class AioChClient:
     def __init__(
         self,
         session: client.ClientSession,

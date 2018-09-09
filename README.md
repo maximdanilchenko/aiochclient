@@ -7,13 +7,13 @@
 `aiochclient` needs `aiohttp.ClientSession` for connecting:
 
 ```python
-from aiochclient import ChClient
+from aiochclient import AioChClient
 from aiohttp import ClientSession
 
 
 async def main():
     async with ClientSession() as s:
-        client = ChClient(s)
+        client = AioChClient(s)
         assert await client.is_alive()  # returns True if connection is Ok
 
 ```

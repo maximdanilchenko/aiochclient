@@ -1,0 +1,2 @@
+class AioChClientError(Exception):
+    pass

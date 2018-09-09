@@ -1,1 +1,1 @@
-from aiochclient.client import ChClient
+from aiochclient.client import AioChClient
