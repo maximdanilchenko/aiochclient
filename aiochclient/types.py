@@ -2,7 +2,7 @@ from datetime import datetime as dt
 from enum import Enum
 
 
-__all__ = ["what_type"]
+__all__ = ["what_type", "convert"]
 
 
 def date(string):
@@ -13,17 +13,12 @@ def datetime(string):
     return dt.strptime(string, "%Y-%m-%d %H:%M:%S")
 
 
-def none(*_):
-    return None
-
-
 class Types(Enum):
     INT = int
     FLOAT = float
     STRING = str
     DATE = date
     DATETIME = datetime
-    NONE = none
 
 
 TYPES_MAPPING = {
@@ -43,10 +38,15 @@ TYPES_MAPPING = {
     "DateTime": Types.DATETIME,
     "Enum8": Types.STRING,
     "Enum16": Types.STRING,
-    "Nullable": Types.NONE,
 }
 
 
 def what_type(name: str) -> type:
     """ Returns python type from clickhouse type name """
     return TYPES_MAPPING[name].value
+
+
+def convert(typ, val):
+    if val == r'\N':
+        return None
+    return typ(val)

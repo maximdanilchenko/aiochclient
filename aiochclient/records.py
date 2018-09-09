@@ -1,6 +1,6 @@
 from typing import List
 from collections import namedtuple
-from aiochclient.types import what_type
+from aiochclient.types import what_type, convert
 
 
 __all__ = ["RecordsFabric", "NamedRecordsFabric"]
@@ -17,7 +17,7 @@ class RecordsFabric:
 
     def new(self, vls: bytes):
         vls = prepare_line(vls)
-        return self.record(typ(val) for typ, val in zip(self.tps, vls))
+        return self.record(convert(typ, val) for typ, val in zip(self.tps, vls))
 
 
 class NamedRecordsFabric(RecordsFabric):

@@ -1,6 +1,8 @@
 # aiochclient
 ### Async http(s) clickhouse client for python 3.6+ with types converting and streaming support
 
+![Status: developing](https://img.shields.io/badge/status-developing-red.svg) 
+
 
 ## Quick start
 
