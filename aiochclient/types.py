@@ -1,5 +1,6 @@
 import re
 from datetime import datetime as dt
+from abc import ABC, abstractmethod
 
 
 __all__ = ["what_type", "convert"]
@@ -88,3 +89,16 @@ def decode(val: bytes) -> str:
         d = d + b[:n]
         b = b[n:]
     return d.decode()
+
+
+class BaseType(ABC):
+
+    def __init__(self, name: str):
+        self.calc_nested
+
+
+    @abstractmethod
+    def __init__(self, name: str):
+        ...
+
+
