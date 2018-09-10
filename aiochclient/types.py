@@ -94,11 +94,14 @@ def decode(val: bytes) -> str:
 class BaseType(ABC):
 
     def __init__(self, name: str):
-        self.calc_nested
-
+        self.calc_nested(name)
 
     @abstractmethod
-    def __init__(self, name: str):
+    def calc_nested(self, name: str):
+        ...
+
+    @abstractmethod
+    def convert(self, value: str):
         ...
 
 
