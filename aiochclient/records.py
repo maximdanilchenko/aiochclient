@@ -7,6 +7,7 @@ __all__ = ["RecordsFabric", "NamedRecordsFabric"]
 
 
 def prepare_line(line: bytes) -> List[str]:
+    print(line)
     return line.decode().strip().split("\t")
 
 
@@ -16,7 +17,8 @@ class RecordsFabric:
         self.record = tuple
 
     def new(self, vls: bytes):
-        vls = prepare_line(vls)
+        vls = vls[:-1].split(b"\t")
+        print(vls)
         return self.record(convert(typ, val) for typ, val in zip(self.tps, vls))
 
 

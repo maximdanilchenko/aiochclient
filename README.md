@@ -31,7 +31,7 @@ rows = await client.fetch("SELECT * FROM t")
 Async iteration on query results steam:
 ```python
 async for row in client.cursor(
-    "SELECT number, number*2 as double FROM system.numbers LIMIT 10000"
+    "SELECT number, number*2 FROM system.numbers LIMIT 10000"
 ):
     assert row[0] * 2 == row[1]
 ```

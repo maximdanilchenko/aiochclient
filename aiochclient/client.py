@@ -33,19 +33,25 @@ class AioChClient:
             return resp.status == 200
 
     async def cursor(self, query: str) -> AsyncGenerator:
-        if not query.lstrip().startswith("SELECT"):
-            raise AioChClientError("Query for fetching should starts with 'SELECT'")
+        # if not query.lstrip().startswith("SELECT"):
+        #     raise AioChClientError("Query for fetching should starts with 'SELECT'")
         query += " FORMAT TSVWithNamesAndTypes"
         async with self._session.post(
             self.url, params=self.params, data=query.encode()
         ) as resp:  # type: client.ClientResponse
+            if resp.status != 200:
+                raise AioChClientError((await resp.read()).decode())
             await resp.content.readline()
             rf = RecordsFabric(await resp.content.readline())
             async for line in resp.content:
                 yield rf.new(line)
 
     async def execute(self, query: str) -> None:
-        await self._session.post(self.url, params=self.params, data=query.encode())
+        async with self._session.post(
+            self.url, params=self.params, data=query.encode()
+        ) as resp:
+            if resp.status != 200:
+                raise AioChClientError((await resp.read()).decode())
 
     async def fetch(self, query: str) -> List:
         return [row async for row in self.cursor(query)]

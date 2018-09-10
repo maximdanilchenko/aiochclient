@@ -4,7 +4,6 @@
 /lib
 /__pycache__
 .coverage
-t.py
 .pypirc
 .pytest_cache
 /docs/build
