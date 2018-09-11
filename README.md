@@ -53,24 +53,26 @@ async for row in client.cursor(
 
 | Clickhouse type | Python type |
 |:----------------|:------------|
-| `UInt8` | int |
-| `UInt16` | int |
-| `UInt32` | int |
-| `UInt64` | int |
-| `Int8` | int |
-| `Int16` | int |
-| `Int32` | int |
-| `Int64` | int |
-| `Float32` | float |
-| `Float64` | float |
-| `String` | str |
-| `FixedString` | str |
-| `Date` | dt.date |
-| `DateTime` | da.datetime |
-| `Tuple(T1, T2, ...)` | tuple(T1, T2, ..) |
-| `Array(T)` | list(T) |
-| `Nullable(T)` | None ot T |
-| `Nothing` | None |
+| `UInt8` | `int` |
+| `UInt16` | `int` |
+| `UInt32` | `int` |
+| `UInt64` | `int` |
+| `Int8` | `int` |
+| `Int16` | `int` |
+| `Int32` | `int` |
+| `Int64` | `int` |
+| `Float32` | `float` |
+| `Float64` | `float` |
+| `String` | `str` |
+| `FixedString` | `str` |
+| `Enum8` | `str` |
+| `Enum16` | `str` |
+| `Date` | `dt.date` |
+| `DateTime` | `da.datetime` |
+| `Tuple(T1, T2, ...)` | `tuple(T1, T2, ...)` |
+| `Array(T)` | `list(T)` |
+| `Nullable(T)` | `None` or `T` |
+| `Nothing` | `None` |
 
 ## Connection pool size
 
