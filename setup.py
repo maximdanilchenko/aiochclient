@@ -12,7 +12,7 @@ def readme(fname):
 
 setup(
     name='aiochclient',
-    version='0.0.0',
+    version='0.0.1',
     description='Async http clickhouse client for python 3.6+',
     long_description=readme('README.md'),
     long_description_content_type="text/markdown",

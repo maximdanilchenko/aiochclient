@@ -33,8 +33,18 @@ class AioChClient:
             return resp.status == 200
 
     async def cursor(self, query: str) -> AsyncGenerator:
-        # if not query.lstrip().startswith("SELECT"):
-        #     raise AioChClientError("Query for fetching should starts with 'SELECT'")
+        check = query.lstrip()[:8].upper()
+        if not any(
+            [
+                check.startswith("SELECT"),
+                check.startswith("SHOW"),
+                check.startswith("DESCRIBE"),
+                check.startswith("EXISTS"),
+            ]
+        ):
+            raise AioChClientError(
+                "Query for fetching should starts with 'SELECT', 'SHOW', 'DESCRIBE' or 'EXISTS'"
+            )
         query += " FORMAT TSVWithNamesAndTypes"
         async with self._session.post(
             self.url, params=self.params, data=query.encode()
@@ -55,3 +65,11 @@ class AioChClient:
 
     async def fetch(self, query: str) -> List:
         return [row async for row in self.cursor(query)]
+
+    async def fetchone(self, query: str) -> List:
+        async for row in self.cursor(query):
+            return row
+
+    async def fetchval(self, query: str) -> List:
+        async for row in self.cursor(query):
+            return row[0]

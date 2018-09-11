@@ -19,14 +19,24 @@ async def main():
         assert await client.is_alive()  # returns True if connection is Ok
 
 ```
-Query example:
+### Query example:
 ```python
-await client.execute("CREATE TABLE t (a UInt8) ENGINE = Memory")
-await client.execute("INSERT INTO t VALUES (1),(2),(3)")
+await client.execute("CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory")
+await client.execute("INSERT INTO t VALUES (1, ('2018-09-07', NULL)),(2, ('2018-09-08', 3.14))")
 ```
-Rows fetching:
+### Rows fetching:
+For fetching all rows at once use `fetch` method:
 ```python
-rows = await client.fetch("SELECT * FROM t")
+all_rows = await client.fetch("SELECT * FROM t")
+```
+For fetching first row from result use `fetchone` method:
+```python
+assert (await client.fetchone("SELECT * FROM t WHERE a=1")) == (1, (dt.date(2018, 9, 7), None))
+```
+You can also use `fetchval` method, which returns 
+first value of the first row from query result:
+```python
+assert await client.fetchval("EXISTS TABLE t")
 ```
 Async iteration on query results steam:
 ```python
@@ -35,8 +45,34 @@ async for row in client.cursor(
 ):
     assert row[0] * 2 == row[1]
 ```
-`AioChClient` returns rows as `tuple`s
+`AioChClient` returns rows as `tuple`s.
+
+## Types converting
+
+`aiochclient` automatically converts values to needed type from Clickhouse response.
+
+| Clickhouse type | Python type |
+|:----------------|:------------|
+| `UInt8` | int |
+| `UInt16` | int |
+| `UInt32` | int |
+| `UInt64` | int |
+| `Int8` | int |
+| `Int16` | int |
+| `Int32` | int |
+| `Int64` | int |
+| `Float32` | float |
+| `Float64` | float |
+| `String` | str |
+| `FixedString` | str |
+| `Date` | dt.date |
+| `DateTime` | da.datetime |
+| `Tuple(T1, T2, ...)` | tuple(T1, T2, ..) |
+| `Array(T)` | list(T) |
+| `Nullable(T)` | None ot T |
+| `Nothing` | None |
 
 ## Connection pool size
 
-If you use `aiochclient` in web apps, you can limit connection pool size with [aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size).
+If you use `aiochclient` in web apps, you can limit connection pool size with 
+[aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size).
