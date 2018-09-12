@@ -1,12 +1,14 @@
 from typing import Generator
 import re
 from datetime import datetime as dt
-from aiochclient.exceptions import AioChClientError
+from aiochclient.exceptions import ChClientError
 
 __all__ = ["what_type"]
 
 
 class BaseType:
+
+    __slots__ = ("name",)
 
     ESC_CHR_MAPPING = {
         b"b": b"\b",
@@ -27,6 +29,7 @@ class BaseType:
         self.name = name
 
     def p_type(self, string: str):
+        """ Function for implementing specific actions for each type """
         string = string.strip("'")
         return string
 
@@ -56,8 +59,11 @@ class BaseType:
         return d.decode()
 
     @classmethod
-    def seq_parser(cls, raw: str) -> Generator:
-        """ function for parsing tuples and arrays """
+    def seq_parser(cls, raw: str) -> Generator[str]:
+        """
+        Generator for parsing tuples and arrays.
+        Returns elements one by one
+        """
         cur = []
         blocked = False
         if not raw:
@@ -116,6 +122,9 @@ class DateTimeType(BaseType):
 
 
 class TupleType(BaseType):
+
+    __slots__ = ("name", "types")
+
     def __init__(self, name: str):
         super().__init__(name)
         tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
@@ -129,6 +138,9 @@ class TupleType(BaseType):
 
 
 class ArrayType(BaseType):
+
+    __slots__ = ("name", "type")
+
     def __init__(self, name: str):
         super().__init__(name)
         self.type = what_type(re.findall(r"^Array\((.*)\)$", name)[0])
@@ -138,6 +150,9 @@ class ArrayType(BaseType):
 
 
 class NullableType(BaseType):
+
+    __slots__ = ("name", "type")
+
     def __init__(self, name: str):
         super().__init__(name)
         self.type = what_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
@@ -178,9 +193,9 @@ TYPES_MAPPING = {
 
 
 def what_type(name: str) -> BaseType:
-    """ Returns python type from clickhouse type name """
+    """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
         return TYPES_MAPPING[name.split("(")[0]](name)
     except KeyError:
-        raise AioChClientError(f"Unrecognized type name: '{name}'")
+        raise ChClientError(f"Unrecognized type name: '{name}'")

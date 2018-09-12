@@ -1,2 +1,2 @@
-from aiochclient.client import AioChClient
-from aiochclient.exceptions import AioChClientError
+from aiochclient.client import ChClient
+from aiochclient.exceptions import ChClientError

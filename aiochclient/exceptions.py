@@ -1,2 +1,2 @@
-class AioChClientError(Exception):
+class ChClientError(Exception):
     pass

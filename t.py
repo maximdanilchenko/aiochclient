@@ -2,12 +2,12 @@ import asyncio
 import logging
 import datetime as dt
 from aiohttp import ClientSession
-from aiochclient import AioChClient
+from aiochclient import ChClient
 
 
 async def main():
     async with ClientSession() as s:
-        client = AioChClient(s, compress_response=True)
+        client = ChClient(s, compress_response=True)
         assert await client.is_alive()
         await client.execute("DROP TABLE IF EXISTS all_types")
         await client.execute("DROP TABLE IF EXISTS t")
@@ -79,7 +79,7 @@ async def main():
 
 async def nulls():
     async with ClientSession() as s:
-        client = AioChClient(s, compress_response=True)
+        client = ChClient(s, compress_response=True)
         assert await client.is_alive()
         assert await client.is_alive()
         await client.execute("DROP TABLE IF EXISTS t")
