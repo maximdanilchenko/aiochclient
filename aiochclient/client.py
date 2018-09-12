@@ -5,6 +5,37 @@ from aiochclient.exceptions import ChClientError
 
 
 class ChClient:
+    """
+    ChClient connection class.
+
+    Usage:
+
+    .. code-block:: python
+
+        async with aiohttp.ClientSession() as s:
+            client = ChClient(s, compress_response=True)
+            assert await client.fetch("SELECT number FROM system.numbers LIMIT 100")
+
+    :param aiohttp.ClientSession session:
+        aiohttp client session. Please, use one session
+        and one ChClient for all connections in your app.
+
+    :param str url:
+        Clickhouse server url. Need full path, like "http://localhost:8123/".
+
+    :param str user:
+        User name for authorization.
+
+    :param str password:
+        Password for authorization.
+
+    :param str database:
+        Database name.
+
+    :param bool compress_response:
+        Pass True if you want Clickhouse to compress its responses with gzip.
+        They will be decompressed automatically. But overall it will be slightly slower.
+    """
 
     __slots__ = ("_session", "url", "params")
 
@@ -18,37 +49,6 @@ class ChClient:
         database: str = "default",
         compress_response: bool = False,
     ):
-        """
-        ChClient connection class.
-
-        Usage:
-
-        .. code-block:: python
-
-            async with aiohttp.ClientSession() as s:
-                client = ChClient(s, compress_response=True)
-                assert await client.fetch("SELECT number FROM system.numbers LIMIT 100")
-
-        :param aiohttp.ClientSession session:
-            aiohttp client session. Please, use one session
-            and one ChClient for all connections in your app.
-
-        :param str url:
-            Clickhouse server url. Need full path, like "http://localhost:8123/".
-
-        :param str user:
-            User name for authorization.
-
-        :param str password:
-            Password for authorization.
-
-        :param str database:
-            Database name.
-
-        :param bool compress_response:
-            Pass True if you want Clickhouse to compress its responses with gzip.
-            They will be decompressed automatically. But overall it will be slightly slower.
-        """
         self._session = session
         self.url = url
         self.params = {}
