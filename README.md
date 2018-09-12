@@ -1,8 +1,15 @@
 # aiochclient
 ### Async http(s) clickhouse client for python 3.6+ with types converting and streaming support
 
-![Status: developing](https://img.shields.io/badge/status-developing-red.svg) 
 
+[![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
+[![Documentation Status](https://readthedocs.org/projects/aiochclient/badge/?version=latest)](https://aiochclient.readthedocs.io/en/latest/?badge=latest)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+
+## Install
+```
+> pip install aiochclient
+```
 
 ## Quick start
 

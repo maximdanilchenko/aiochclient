@@ -9,4 +9,5 @@ Async http(s) clickhouse client for python 3.6+ with types converting and stream
     :maxdepth: 2
     :caption: Contents:
 
+    install
     api
