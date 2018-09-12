@@ -152,7 +152,7 @@ class ChClient:
             return row[0]
         return None
 
-    async def cursor(self, query: str) -> AsyncGenerator[tuple]:
+    async def cursor(self, query: str) -> AsyncGenerator[tuple, None]:
         """
         Async generator by all rows from query result.
 

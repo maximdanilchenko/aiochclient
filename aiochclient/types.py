@@ -59,7 +59,7 @@ class BaseType:
         return d.decode()
 
     @classmethod
-    def seq_parser(cls, raw: str) -> Generator[str]:
+    def seq_parser(cls, raw: str) -> Generator[str, None, None]:
         """
         Generator for parsing tuples and arrays.
         Returns elements one by one
