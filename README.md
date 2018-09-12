@@ -45,7 +45,7 @@ async for row in client.cursor(
 ):
     assert row[0] * 2 == row[1]
 ```
-`AioChClient` returns rows as `tuple`s.
+`ChClient` returns rows as `tuple`s.
 
 ## Types converting
 
