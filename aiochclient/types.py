@@ -1,9 +1,9 @@
-from typing import Generator
+from typing import Generator, Any, Type
 import re
-from datetime import datetime as dt
+import datetime as dt
 from aiochclient.exceptions import ChClientError
 
-__all__ = ["what_type"]
+__all__ = ["what_py_type", "rows2ch"]
 
 
 class BaseType:
@@ -79,8 +79,12 @@ class BaseType:
                 cur.append(sym)
         yield "".join(cur)
 
-    def convert(self, value: bytes):
+    def convert(self, value: bytes) -> Any:
         return self.p_type(self.decode(value))
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return f"'{value}'".encode()
 
 
 class StrType(BaseType):
@@ -91,8 +95,12 @@ class IntType(BaseType):
     def p_type(self, string: str):
         return int(string)
 
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return f"{value}".encode()
 
-class FloatType(BaseType):
+
+class FloatType(IntType):
     def p_type(self, string: str):
         return float(string)
 
@@ -101,7 +109,7 @@ class DateType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return dt.strptime(string, "%Y-%m-%d").date()
+            return dt.datetime.strptime(string, "%Y-%m-%d").date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":
@@ -113,12 +121,16 @@ class DateTimeType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return dt.strptime(string, "%Y-%m-%d %H:%M:%S")
+            return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":
                 return None
             raise
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return f"'{value.replace(microsecond=0)}'".encode()
 
 
 class TupleType(BaseType):
@@ -128,13 +140,17 @@ class TupleType(BaseType):
     def __init__(self, name: str):
         super().__init__(name)
         tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
-        self.types = tuple(what_type(tp) for tp in tps.split(","))
+        self.types = tuple(what_py_type(tp) for tp in tps.split(","))
 
     def p_type(self, string: str):
         return tuple(
             tp.p_type(val)
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
 
 class ArrayType(BaseType):
@@ -143,10 +159,14 @@ class ArrayType(BaseType):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self.type = what_type(re.findall(r"^Array\((.*)\)$", name)[0])
+        self.type = what_py_type(re.findall(r"^Array\((.*)\)$", name)[0])
 
     def p_type(self, string: str):
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
 class NullableType(BaseType):
@@ -155,12 +175,16 @@ class NullableType(BaseType):
 
     def __init__(self, name: str):
         super().__init__(name)
-        self.type = what_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
+        self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
 
     def p_type(self, string: str):
         if string in {r"\N", "NULL"}:
             return None
         return self.type.p_type(string)
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return b"NULL"
 
 
 class NothingType(BaseType):
@@ -168,7 +192,7 @@ class NothingType(BaseType):
         return None
 
 
-TYPES_MAPPING = {
+CH_TYPES_MAPPING = {
     "UInt8": IntType,
     "UInt16": IntType,
     "UInt32": IntType,
@@ -191,11 +215,37 @@ TYPES_MAPPING = {
     "Nothing": NothingType,
 }
 
+PY_TYPES_MAPPING = {
+    int: IntType,
+    float: FloatType,
+    str: StrType,
+    dt.date: DateType,
+    dt.datetime: DateTimeType,
+    tuple: TupleType,
+    list: ArrayType,
+    type(None): NullableType,
+}
 
-def what_type(name: str) -> BaseType:
+
+def what_py_type(name: str) -> BaseType:
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
-        return TYPES_MAPPING[name.split("(")[0]](name)
+        return CH_TYPES_MAPPING[name.split("(")[0]](name)
     except KeyError:
         raise ChClientError(f"Unrecognized type name: '{name}'")
+
+
+def py2ch(value):
+    return what_ch_type(type(value)).unconvert(value)
+
+
+def rows2ch(*rows):
+    return b",".join(TupleType.unconvert(row) for row in rows)
+
+
+def what_ch_type(typ) -> Type[BaseType]:
+    try:
+        return PY_TYPES_MAPPING[typ]
+    except KeyError:
+        raise ChClientError(f"Unrecognized type: '{typ}'")

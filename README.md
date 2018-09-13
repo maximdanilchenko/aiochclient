@@ -1,6 +1,5 @@
 # aiochclient
-### Async http(s) clickhouse client for python 3.6+ with types converting and streaming support
-
+### Async http(s) clickhouse client for python 3.6+ with types converting in both directions and streaming support
 
 [![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
 [![Documentation Status](https://readthedocs.org/projects/aiochclient/badge/?version=latest)](https://aiochclient.readthedocs.io/en/latest/?badge=latest)
@@ -26,24 +25,34 @@ async def main():
         assert await client.is_alive()  # returns True if connection is Ok
 
 ```
-### Query example:
+## Query examples
 ```python
-await client.execute("CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory")
-await client.execute("INSERT INTO t VALUES (1, ('2018-09-07', NULL)),(2, ('2018-09-08', 3.14))")
+await client.execute(
+    "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
+)
 ```
-### Rows fetching:
+For INSERT queries you can pass values as `*args`. Values should be iterables.
+```python
+await client.execute(
+    "INSERT INTO t VALUES",
+    (1, (dt.date(2018, 9, 7), None)),
+    (2, (dt.date(2018, 9, 8), 3.14)),
+)
+```
 For fetching all rows at once use `fetch` method:
 ```python
 all_rows = await client.fetch("SELECT * FROM t")
 ```
 For fetching first row from result use `fetchone` method:
 ```python
-assert (await client.fetchone("SELECT * FROM t WHERE a=1")) == (1, (dt.date(2018, 9, 7), None))
+row = await client.fetchone("SELECT * FROM t WHERE a=1")
+assert row == (1, (dt.date(2018, 9, 7), None))
 ```
 You can also use `fetchval` method, which returns 
 first value of the first row from query result:
 ```python
-assert await client.fetchval("EXISTS TABLE t")
+val = await client.fetchval("SELECT b FROM t WHERE a=2")
+assert val == (dt.date(2018, 9, 8), 3.14)
 ```
 Async iteration on query results steam:
 ```python
@@ -52,11 +61,16 @@ async for row in client.cursor(
 ):
     assert row[0] * 2 == row[1]
 ```
+
 `ChClient` returns rows as `tuple`s.
+
+Use `fetch`/`fetchrow`/`fetchone` for SELECT queries 
+and `execute` or any of last for INSERT and all another queries.
 
 ## Types converting
 
-`aiochclient` automatically converts values to needed type from Clickhouse response.
+`aiochclient` automatically converts values to needed type both 
+from Clickhouse response and for client INSERT queries.
 
 | Clickhouse type | Python type |
 |:----------------|:------------|
@@ -81,7 +95,7 @@ async for row in client.cursor(
 | `Nullable(T)` | `None` or `T` |
 | `Nothing` | `None` |
 
-## Connection pool size
+## Connection pool
 
 If you use `aiochclient` in web apps, you can limit connection pool size with 
 [aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size).

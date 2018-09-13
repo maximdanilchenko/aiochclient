@@ -1,4 +1,4 @@
-from aiochclient.types import what_type
+from aiochclient.types import what_py_type
 
 
 __all__ = ["RecordsFabric"]
@@ -9,7 +9,7 @@ class RecordsFabric:
     __slots__ = ("tps",)
 
     def __init__(self, tps: bytes):
-        self.tps = [what_type(tp) for tp in tps.decode().strip().split("\t")]
+        self.tps = [what_py_type(tp) for tp in tps.decode().strip().split("\t")]
 
     def new(self, vls: bytes):
         vls = vls[:-1]
