@@ -46,6 +46,55 @@ async def main():
                                       'hello', 'world', [1,2,3,4], (65, 'world'), 4, ['wqe', 'ert'])
         """
         )
+        await client.execute(
+            """
+        INSERT INTO all_types values
+        """,
+            (
+                1,
+                1000,
+                10000,
+                12345678910,
+                -4,
+                -453,
+                21322,
+                -32123,
+                23.432,
+                -56754.564542,
+                "hello man",
+                "hello fixed man",
+                dt.date(2018, 9, 7),
+                dt.datetime(2018, 9, 7, 6, 6, 6),
+                "hello",
+                "world",
+                [1, 2, 3, 4],
+                (4, "hello"),
+                None,
+                [],
+            ),
+            (
+                0,
+                999,
+                9999,
+                99945678913,
+                4,
+                53,
+                -221322,
+                453123,
+                23.432,
+                12324.5632,
+                "\b\f\r\n\t",
+                "hello fixed man",
+                dt.date(2018, 9, 7),
+                dt.datetime(2018, 9, 7, 6, 6, 6),
+                "hello",
+                "world",
+                [1, 2, 3, 4],
+                (65, "world"),
+                4,
+                ["wqe", "ert"],
+            ),
+        )
         async for record in client.cursor("SELECT * FROM all_types WITH TOTALS "):
             print(record)
         print(await client.fetchone("SHOW TABLES"))
@@ -58,7 +107,9 @@ async def main():
         )
 
         await client.execute(
-            "INSERT INTO t VALUES (1, ('2018-09-07', NULL)),(2, ('2018-09-08', 3.14))"
+            "INSERT INTO t VALUES",
+            (1, (dt.date(2018, 9, 7), None)),
+            (2, (dt.date(2018, 9, 8), 3.14)),
         )
 
         print(await client.fetch("SELECT * FROM t"))
@@ -69,7 +120,7 @@ async def main():
             (dt.date(2018, 9, 7), None),
         )
 
-        assert await client.fetchval("EXISTS TABLE t")
+        assert await client.fetchval("SELECT b FROM t WHERE a=2") == (dt.date(2018, 9, 8), 3.14)
 
         async for row in client.cursor(
             "SELECT number, number*2 FROM system.numbers LIMIT 10000"

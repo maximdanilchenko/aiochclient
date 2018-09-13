@@ -1,7 +1,9 @@
+from enum import Enum
 from typing import Any, AsyncGenerator
 from aiohttp import client
 from aiochclient.records import RecordsFabric
 from aiochclient.exceptions import ChClientError
+from aiochclient.types import rows2ch
 
 
 class ChClient:
@@ -39,6 +41,11 @@ class ChClient:
 
     __slots__ = ("_session", "url", "params")
 
+    class QueryTypes(Enum):
+        FETCH = 0
+        INSERT = 1
+        OTHER = 2
+
     def __init__(
         self,
         session: client.ClientSession,
@@ -61,6 +68,22 @@ class ChClient:
         if compress_response:
             self.params["enable_http_compression"] = 1
 
+    @classmethod
+    def query_type(cls, query):
+        check = query.lstrip()[:8].upper()
+        if any(
+                [
+                    check.startswith("SELECT"),
+                    check.startswith("SHOW"),
+                    check.startswith("DESCRIBE"),
+                    check.startswith("EXISTS"),
+                ]
+        ):
+            return cls.QueryTypes.FETCH
+        if check.startswith("INSERT"):
+            return cls.QueryTypes.INSERT
+        return cls.QueryTypes.OTHER
+
     async def is_alive(self) -> bool:
         """
         Checks if connection is Ok.
@@ -78,32 +101,64 @@ class ChClient:
         ) as resp:  # type: client.ClientResponse
             return resp.status == 200
 
-    async def execute(self, query: str) -> None:
+    async def _execute(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+        query_type = self.query_type(query)
+
+        if query_type == self.QueryTypes.FETCH:
+            query += " FORMAT TSVWithNamesAndTypes"
+
+        if args:
+            if query_type != self.QueryTypes.INSERT:
+                raise ChClientError(
+                    "It is possible to pass arguments only for INSERT queries"
+                )
+            params = {**self.params, 'query': query}
+            data = rows2ch(*args)
+        else:
+            params = self.params
+            data = query.encode()
+
+        async with self._session.post(
+                self.url, params=params, data=data
+        ) as resp:  # type: client.ClientResponse
+            if resp.status != 200:
+                raise ChClientError((await resp.read()).decode())
+            if query_type == self.QueryTypes.FETCH:
+                await resp.content.readline()
+                rf = RecordsFabric(await resp.content.readline())
+                async for line in resp.content:
+                    yield rf.new(line)
+
+    async def execute(self, query: str, *args) -> list or None:
         """
-        Execute query without reading the response.
+        Execute query. Returns None.
 
         :param query: Clickhouse query string.
+        :param args: Arguments for insert queries.
 
         Usage:
 
         .. code-block:: python
 
-            await client.execute("CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory")
-            await client.execute("INSERT INTO t VALUES (1, ('2018-09-07', NULL)),(2, ('2018-09-08', 3.14))")
+            await client.execute(
+                "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
+            )
+            await client.execute(
+                "INSERT INTO t VALUES",
+                (1, (dt.date(2018, 9, 7), None)),
+                (2, (dt.date(2018, 9, 8), 3.14)),
+            )
 
         :return: Nothing.
         """
-        async with self._session.post(
-            self.url, params=self.params, data=query.encode()
-        ) as resp:
-            if resp.status != 200:
-                raise ChClientError((await resp.read()).decode())
+        async for _ in self._execute(query, *args):
+            return None
 
-    async def fetch(self, query: str) -> list:
+    async def fetch(self, query: str, *args) -> list:
         """
-        Execute query and fetch all rows from query result at once.
+        Execute query and fetch all rows from query result at once in a list.
 
-        :param query: Clickhouse query string (One of SELECT, SHOW, DESCRIBE or EXISTS).
+        :param query: Clickhouse query string.
 
         Usage:
 
@@ -113,13 +168,13 @@ class ChClient:
 
         :return: All rows from query.
         """
-        return [row async for row in self.cursor(query)]
+        return [row async for row in self._execute(query, *args)]
 
-    async def fetchone(self, query: str) -> tuple or None:
+    async def fetchone(self, query: str, *args) -> tuple or None:
         """
-        Execute query and fetch first row from query result.
+        Execute query and fetch first row from query result or None.
 
-        :param query: Clickhouse query string (One of SELECT, SHOW, DESCRIBE or EXISTS).
+        :param query: Clickhouse query string.
 
         Usage:
 
@@ -130,33 +185,35 @@ class ChClient:
 
         :return: First row from query or None if there no results.
         """
-        async for row in self.cursor(query):
+        async for row in self._execute(query, *args):
             return row
         return None
 
-    async def fetchval(self, query: str) -> Any:
+    async def fetchval(self, query: str, *args) -> Any:
         """
-        Execute query and fetch first value of the first row from query result.
+        Execute query and fetch first value of the first row from query result or None.
 
-        :param query: Clickhouse query string (One of SELECT, SHOW, DESCRIBE or EXISTS).
+        :param query: Clickhouse query string.
 
         Usage:
 
         .. code-block:: python
 
-            assert await client.fetchval("EXISTS TABLE t")
+            val = await client.fetchval("SELECT b FROM t WHERE a=2")
+            assert val == (dt.date(2018, 9, 8), 3.14)
 
         :return: First value of the first row or None if there no results.
         """
-        async for row in self.cursor(query):
-            return row[0]
+        async for row in self._execute(query, *args):
+            if row:
+                return row[0]
         return None
 
-    async def cursor(self, query: str) -> AsyncGenerator[tuple, None]:
+    async def cursor(self, query: str, *args) -> AsyncGenerator[tuple, None]:
         """
         Async generator by all rows from query result.
 
-        :param query: Clickhouse query string (One of SELECT, SHOW, DESCRIBE or EXISTS).
+        :param query: Clickhouse query string.
 
         Usage:
 
@@ -169,25 +226,5 @@ class ChClient:
 
         :return: Rows one by one.
         """
-        check = query.lstrip()[:8].upper()
-        if not any(
-                [
-                    check.startswith("SELECT"),
-                    check.startswith("SHOW"),
-                    check.startswith("DESCRIBE"),
-                    check.startswith("EXISTS"),
-                ]
-        ):
-            raise ChClientError(
-                "Query for fetching should starts with 'SELECT', 'SHOW', 'DESCRIBE' or 'EXISTS'"
-            )
-        query += " FORMAT TSVWithNamesAndTypes"
-        async with self._session.post(
-                self.url, params=self.params, data=query.encode()
-        ) as resp:  # type: client.ClientResponse
-            if resp.status != 200:
-                raise ChClientError((await resp.read()).decode())
-            await resp.content.readline()
-            rf = RecordsFabric(await resp.content.readline())
-            async for line in resp.content:
-                yield rf.new(line)
+        async for row in self._execute(query, *args):
+            yield row
