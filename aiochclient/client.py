@@ -72,12 +72,12 @@ class ChClient:
     def query_type(cls, query):
         check = query.lstrip()[:8].upper()
         if any(
-                [
-                    check.startswith("SELECT"),
-                    check.startswith("SHOW"),
-                    check.startswith("DESCRIBE"),
-                    check.startswith("EXISTS"),
-                ]
+            [
+                check.startswith("SELECT"),
+                check.startswith("SHOW"),
+                check.startswith("DESCRIBE"),
+                check.startswith("EXISTS"),
+            ]
         ):
             return cls.QueryTypes.FETCH
         if check.startswith("INSERT"):
@@ -112,14 +112,14 @@ class ChClient:
                 raise ChClientError(
                     "It is possible to pass arguments only for INSERT queries"
                 )
-            params = {**self.params, 'query': query}
+            params = {**self.params, "query": query}
             data = rows2ch(*args)
         else:
             params = self.params
             data = query.encode()
 
         async with self._session.post(
-                self.url, params=params, data=data
+            self.url, params=params, data=data
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode())

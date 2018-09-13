@@ -150,7 +150,7 @@ class TupleType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return b'(' + b','.join(py2ch(elem) for elem in value) + b')'
+        return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
 
 class ArrayType(BaseType):
@@ -166,7 +166,7 @@ class ArrayType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return b'[' + b','.join(py2ch(elem) for elem in value) + b']'
+        return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
 class NullableType(BaseType):
@@ -184,7 +184,7 @@ class NullableType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return b'NULL'
+        return b"NULL"
 
 
 class NothingType(BaseType):
@@ -241,7 +241,7 @@ def py2ch(value):
 
 
 def rows2ch(*rows):
-    return b','.join(TupleType.unconvert(row) for row in rows)
+    return b",".join(TupleType.unconvert(row) for row in rows)
 
 
 def what_ch_type(typ) -> Type[BaseType]:
