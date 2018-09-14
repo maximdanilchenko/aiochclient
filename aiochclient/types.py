@@ -25,14 +25,12 @@ class BaseType:
     DQ = "'"
     CM = ","
 
-    def __init__(self, name: str, container: bool=False):
+    def __init__(self, name: str, container: bool = False):
         self.name = name
         self.container = container
 
-    def p_type(self, string: str):
+    def p_type(self, string):
         """ Function for implementing specific actions for each type """
-        if self.container:
-            return string.strip("'")
         return string
 
     @classmethod
@@ -90,10 +88,14 @@ class BaseType:
 
 
 class StrType(BaseType):
+    def p_type(self, string: str):
+        if self.container:
+            return string.strip("'")
+        return string
 
     @staticmethod
     def unconvert(value: str) -> bytes:
-        value = value.replace('\\', '\\\\').replace("'", "\\'")
+        value = value.replace("\\", "\\\\").replace("'", "\\'")
         return f"'{value}'".encode()
 
 
@@ -165,7 +167,9 @@ class ArrayType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(re.findall(r"^Array\((.*)\)$", name)[0], container=True)
+        self.type = what_py_type(
+            re.findall(r"^Array\((.*)\)$", name)[0], container=True
+        )
 
     def p_type(self, string: str):
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
@@ -233,7 +237,7 @@ PY_TYPES_MAPPING = {
 }
 
 
-def what_py_type(name: str, container: bool=False) -> BaseType:
+def what_py_type(name: str, container: bool = False) -> BaseType:
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
