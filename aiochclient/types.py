@@ -8,7 +8,7 @@ __all__ = ["what_py_type", "rows2ch"]
 
 class BaseType:
 
-    __slots__ = ("name",)
+    __slots__ = ("name", "container")
 
     ESC_CHR_MAPPING = {
         b"b": b"\b",
@@ -25,12 +25,14 @@ class BaseType:
     DQ = "'"
     CM = ","
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, container: bool=False):
         self.name = name
+        self.container = container
 
     def p_type(self, string: str):
         """ Function for implementing specific actions for each type """
-        string = string.strip("'")
+        if self.container:
+            return string.strip("'")
         return string
 
     @classmethod
@@ -67,7 +69,7 @@ class BaseType:
         cur = []
         blocked = False
         if not raw:
-            raise StopIteration
+            return None
         for sym in raw:
             if sym == cls.CM and not blocked:
                 yield "".join(cur)
@@ -88,7 +90,11 @@ class BaseType:
 
 
 class StrType(BaseType):
-    pass
+
+    @staticmethod
+    def unconvert(value: str) -> bytes:
+        value = value.replace('\\', '\\\\').replace("'", "\\'")
+        return f"'{value}'".encode()
 
 
 class IntType(BaseType):
@@ -137,10 +143,10 @@ class TupleType(BaseType):
 
     __slots__ = ("name", "types")
 
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
         tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
-        self.types = tuple(what_py_type(tp) for tp in tps.split(","))
+        self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
 
     def p_type(self, string: str):
         return tuple(
@@ -157,9 +163,9 @@ class ArrayType(BaseType):
 
     __slots__ = ("name", "type")
 
-    def __init__(self, name: str):
-        super().__init__(name)
-        self.type = what_py_type(re.findall(r"^Array\((.*)\)$", name)[0])
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
+        self.type = what_py_type(re.findall(r"^Array\((.*)\)$", name)[0], container=True)
 
     def p_type(self, string: str):
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
@@ -173,8 +179,8 @@ class NullableType(BaseType):
 
     __slots__ = ("name", "type")
 
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
         self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
 
     def p_type(self, string: str):
@@ -227,11 +233,11 @@ PY_TYPES_MAPPING = {
 }
 
 
-def what_py_type(name: str) -> BaseType:
+def what_py_type(name: str, container: bool=False) -> BaseType:
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
-        return CH_TYPES_MAPPING[name.split("(")[0]](name)
+        return CH_TYPES_MAPPING[name.split("(")[0]](name, container=container)
     except KeyError:
         raise ChClientError(f"Unrecognized type name: '{name}'")
 

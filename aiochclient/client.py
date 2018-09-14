@@ -106,7 +106,6 @@ class ChClient:
 
         if query_type == self.QueryTypes.FETCH:
             query += " FORMAT TSVWithNamesAndTypes"
-
         if args:
             if query_type != self.QueryTypes.INSERT:
                 raise ChClientError(

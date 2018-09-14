@@ -10,7 +10,6 @@ async def main():
         client = ChClient(s, compress_response=True)
         assert await client.is_alive()
         await client.execute("DROP TABLE IF EXISTS all_types")
-        await client.execute("DROP TABLE IF EXISTS t")
         await client.execute(
             """
         CREATE TABLE all_types (a UInt8, 
@@ -62,7 +61,7 @@ async def main():
                 23.432,
                 -56754.564542,
                 "hello man",
-                "hello fixed man",
+                "hello\\\\qixed man",
                 dt.date(2018, 9, 7),
                 dt.datetime(2018, 9, 7, 6, 6, 6),
                 "hello",
@@ -102,43 +101,31 @@ async def main():
         print(await client.fetchone("DESCRIBE TABLE all_types"))
         print(await client.fetchval("EXISTS TABLE all_types"))
 
+
+async def mini():
+    async with ClientSession() as s:
+        client = ChClient(s, compress_response=True)
+        assert await client.is_alive()
+        await client.execute("DROP TABLE IF EXISTS t")
         await client.execute(
-            "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
+            "CREATE TABLE t (a String, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
         )
 
         await client.execute(
             "INSERT INTO t VALUES",
-            (1, (dt.date(2018, 9, 7), None)),
-            (2, (dt.date(2018, 9, 8), 3.14)),
+            ("1\\", (dt.date(2018, 9, 7), None)),
+            ("2'", (dt.date(2018, 9, 8), 3.14)),
         )
 
         print(await client.fetch("SELECT * FROM t"))
 
-        print(await client.fetchone("SELECT * FROM t WHERE a=1"))
-        assert (await client.fetchone("SELECT * FROM t WHERE a=1")) == (
-            1,
-            (dt.date(2018, 9, 7), None),
-        )
-
-        assert await client.fetchval("SELECT b FROM t WHERE a=2") == (dt.date(2018, 9, 8), 3.14)
-
-        async for row in client.cursor(
-            "SELECT number, number*2 FROM system.numbers LIMIT 10000"
-        ):
-            assert row[0] * 2 == row[1]
-
-
-async def nulls():
-    async with ClientSession() as s:
-        client = ChClient(s, compress_response=True)
-        assert await client.is_alive()
-        assert await client.is_alive()
-        await client.execute("DROP TABLE IF EXISTS t")
-        await client.execute(
-            "CREATE TABLE t (a Nullable(UInt8), b Tuple(Nullable(UInt8), UInt8)) ENGINE = Memory"
-        )
-        await client.execute("INSERT INTO t VALUES (NULL, (NULL, 1))")
-        print(await client.fetch("SELECT * FROM t"))
+        # print(await client.fetchone("SELECT * FROM t WHERE a='1\\\\'"))
+        # assert (await client.fetchone("SELECT * FROM t WHERE a='1\\\\'")) == (
+        #     "1\\",
+        #     (dt.date(2018, 9, 7), None),
+        # )
+        #
+        # assert await client.fetchval("SELECT b FROM t WHERE a='2'") == (dt.date(2018, 9, 8), 3.14)
 
 
 if __name__ == "__main__":
@@ -147,5 +134,5 @@ if __name__ == "__main__":
     logger.addHandler(logging.StreamHandler())
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(mini())
     loop.close()
