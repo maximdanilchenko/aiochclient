@@ -10,3 +10,10 @@ install:
 script:
   - pytest tests
 after_success: codecov
+sudo: required
+services:
+  - docker
+before_install:
+  - docker pull yandex/clickhouse-server
+  - docker run -p 8123:8123 -d --name cs yandex/clickhouse-server
+  - docker ps -a
