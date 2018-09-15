@@ -134,5 +134,5 @@ if __name__ == "__main__":
     logger.addHandler(logging.StreamHandler())
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(mini())
     loop.close()

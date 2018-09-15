@@ -2,7 +2,7 @@ aiohttp
 pytest
 pytest-cov
 pytest-sugar
-pytest-aiohttp
+pytest-asyncio
 sphinx
 sphinx_issues
 sphinx_rtd_theme
