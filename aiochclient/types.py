@@ -258,4 +258,7 @@ def what_ch_type(typ) -> Type[BaseType]:
     try:
         return PY_TYPES_MAPPING[typ]
     except KeyError:
-        raise ChClientError(f"Unrecognized type: '{typ}'")
+        raise ChClientError(f"Unrecognized type: '{typ}'. "
+                            f"Value should be exactly the type of "
+                            f"int, float, str, dt.date, dt.datetime, tuple, list or None. "
+                            f"No subclasses yet.")
