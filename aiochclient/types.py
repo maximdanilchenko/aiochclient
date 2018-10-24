@@ -2,6 +2,7 @@ from typing import Generator, Any, Type
 import re
 import datetime as dt
 from aiochclient.exceptions import ChClientError
+from aiochclient.parsers import seq_parser, decode
 
 __all__ = ["what_py_type", "rows2ch"]
 
@@ -34,7 +35,7 @@ class BaseType:
         return string
 
     @classmethod
-    def decode(cls, val: bytes) -> str:
+    def _decode(cls, val: bytes) -> str:
         """
         Converting bytes from clickhouse with
         backslash-escaped special characters
@@ -58,8 +59,10 @@ class BaseType:
             b = b[n:]
         return d.decode()
 
+    decode = decode
+
     @classmethod
-    def seq_parser(cls, raw: str) -> Generator[str, None, None]:
+    def _seq_parser(cls, raw: str) -> Generator[str, None, None]:
         """
         Generator for parsing tuples and arrays.
         Returns elements one by one
@@ -78,6 +81,8 @@ class BaseType:
             else:
                 cur.append(sym)
         yield "".join(cur)
+
+    seq_parser = seq_parser
 
     def convert(self, value: bytes) -> Any:
         return self.p_type(self.decode(value))

@@ -1,5 +1,6 @@
 from setuptools import find_packages
 from setuptools import setup
+from Cython.Build import cythonize
 
 REQUIRES = ['aiohttp<=3.4.4']
 
@@ -36,4 +37,5 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     test_suite='tests',
+    ext_modules=cythonize("aiochclient/parsers.pyx"),
 )

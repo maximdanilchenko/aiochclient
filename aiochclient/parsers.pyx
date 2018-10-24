@@ -13,12 +13,13 @@ ESC_CHR_MAPPING = {
 DQ = "'"
 CM = ","
 
-def decode(val):
+def decode(char* val):
     """
     Converting bytes from clickhouse with
     backslash-escaped special characters
     to pythonic string format
     """
+    cdef int n
     n = val.find(b"\\")
     if n < 0:
         return val.decode()
@@ -37,7 +38,7 @@ def decode(val):
         b = b[n:]
     return d.decode()
 
-def seq_parser(cls, raw):
+def seq_parser(raw):
     """
     Generator for parsing tuples and arrays.
     Returns elements one by one
@@ -47,10 +48,10 @@ def seq_parser(cls, raw):
     if not raw:
         return None
     for sym in raw:
-        if sym == cls.CM and not blocked:
+        if sym == CM and not blocked:
             yield "".join(cur)
             cur = []
-        elif sym == cls.DQ:
+        elif sym == DQ:
             blocked = not blocked
             cur.append(sym)
         else:
