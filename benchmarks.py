@@ -92,5 +92,10 @@ async def bench_inserts(*, retries: int, rows: int):
 
 
 if __name__ == "__main__":
-    run(bench_selects(retries=1000, rows=1000))
-    run(bench_inserts(retries=1000, rows=1000))
+    run(bench_selects(retries=100, rows=1000))
+    run(bench_inserts(retries=100, rows=1000))
+"""
+Pure python:
+- Average time for selecting 1000 rows (from 100 runs): 0.08974601745605469 seconds
+- Average time for inserting 1000 rows (from 100 runs): 0.032454588413238526 seconds
+"""

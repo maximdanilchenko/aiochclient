@@ -14,16 +14,13 @@ DQ = "'"
 CM = ","
 
 
-def decode(val):
-    return _decode(val).decode()
-
-
-cdef _decode(bytes val):
+def decode(char* val):
     """
     Converting bytes from clickhouse with
     backslash-escaped special characters
     to pythonic string format
     """
+    cdef int n
     n = val.find(b"\\")
     if n < 0:
         return val
