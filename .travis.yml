@@ -7,6 +7,7 @@ matrix:
       sudo: true
 install:
   - pip install -r dev-requirements.txt
+  - pip install -e .
 script:
   - pytest tests.py --cov aiochclient
 after_success: codecov

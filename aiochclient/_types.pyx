@@ -1,120 +1,129 @@
-from typing import Generator, Any, Type
 import re
-import datetime as dt
+from cpython cimport datetime as dt
+from cpython cimport bool
+
 from aiochclient.exceptions import ChClientError
 
 __all__ = ["what_py_type", "rows2ch"]
 
+cdef dict ESC_CHR_MAPPING = {
+    b"b": b"\b",
+    b"N": b"\N",  # NULL
+    b"f": b"\f",
+    b"r": b"\r",
+    b"n": b"\n",
+    b"t": b"\t",
+    b"0": b" ",
+    b"'": b"'",
+    b"\\": b"\\",
+}
 
-class BaseType:
+cdef str DQ = "'", CM = ","
+
+
+cdef class BaseType:
+
+    cdef str name
+    cdef bool container
 
     __slots__ = ("name", "container")
 
-    ESC_CHR_MAPPING = {
-        b"b": b"\b",
-        b"N": b"\N",  # NULL
-        b"f": b"\f",
-        b"r": b"\r",
-        b"n": b"\n",
-        b"t": b"\t",
-        b"0": b" ",
-        b"'": b"'",
-        b"\\": b"\\",
-    }
-
-    DQ = "'"
-    CM = ","
-
-    def __init__(self, name: str, container: bool = False):
+    def __init__(self, str name, bool container):
         self.name = name
         self.container = container
 
-    def p_type(self, string):
+    cdef p_type(self, str string):
         """ Function for implementing specific actions for each type """
         return string
 
-    @classmethod
-    def decode(cls, val: bytes) -> str:
+    cdef str decode(self, bytes val):
         """
         Converting bytes from clickhouse with
         backslash-escaped special characters
         to pythonic string format
         """
-        n = val.find(b"\\")
+        cdef int n = val.find(b"\\")
+        cdef bytes d, b
         if n < 0:
             return val.decode()
         n += 1
         d = val[:n]
         b = val[n:]
         while b:
-            d = d[:-1] + cls.ESC_CHR_MAPPING.get(b[0:1], b[0:1])
+            d = d[:-1] + ESC_CHR_MAPPING.get(b[0:1], b[0:1])
             b = b[1:]
             n = b.find(b"\\")
             if n < 0:
                 d = d + b
                 break
             n += 1
-            d = d + b[:n]
+            d += b[:n]
             b = b[n:]
         return d.decode()
 
-    @classmethod
-    def seq_parser(cls, raw: str) -> Generator[str, None, None]:
+    def seq_parser(self, str raw):
         """
         Generator for parsing tuples and arrays.
         Returns elements one by one
         """
-        cur = []
-        blocked = False
-        if not raw:
+        cdef list cur = []
+        cdef str sym
+        cdef int i, length = len(raw)
+        cdef bool blocked = False
+        if length == 0:
             return None
-        for sym in raw:
-            if sym == cls.CM and not blocked:
+        for i in range(length):
+            sym = raw[i]
+            if sym == CM and not blocked:
                 yield "".join(cur)
                 cur = []
-            elif sym == cls.DQ:
+            elif sym == DQ:
                 blocked = not blocked
                 cur.append(sym)
             else:
                 cur.append(sym)
         yield "".join(cur)
 
-    def convert(self, value: bytes) -> Any:
+    cpdef convert(self, bytes value):
         return self.p_type(self.decode(value))
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(str value):
         return f"'{value}'".encode()
 
 
-class StrType(BaseType):
-    def p_type(self, string: str):
+cdef class StrType(BaseType):
+    cdef p_type(self, str string):
         if self.container:
             return string.strip("'")
         return string
 
     @staticmethod
-    def unconvert(value: str) -> bytes:
+    def unconvert(str value):
         value = value.replace("\\", "\\\\").replace("'", "\\'")
         return f"'{value}'".encode()
 
 
-class IntType(BaseType):
-    def p_type(self, string: str):
+cdef class IntType(BaseType):
+    cdef p_type(self, str string):
         return int(string)
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(int value):
         return f"{value}".encode()
 
 
-class FloatType(IntType):
-    def p_type(self, string: str):
+cdef class FloatType(IntType):
+    cdef p_type(self, str string):
         return float(string)
 
+    @staticmethod
+    def unconvert(float value):
+        return f"{value}".encode()
 
-class DateType(BaseType):
-    def p_type(self, string: str):
+
+cdef class DateType(BaseType):
+    cdef p_type(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d").date()
@@ -124,9 +133,13 @@ class DateType(BaseType):
                 return None
             raise
 
+    @staticmethod
+    def unconvert(dt.date value):
+        return f"'{value}'".encode()
 
-class DateTimeType(BaseType):
-    def p_type(self, string: str):
+
+cdef class DateTimeType(BaseType):
+    cdef p_type(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
@@ -137,73 +150,78 @@ class DateTimeType(BaseType):
             raise
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(dt.datetime value):
         return f"'{value.replace(microsecond=0)}'".encode()
 
 
-class TupleType(BaseType):
+cdef class TupleType(BaseType):
 
     __slots__ = ("name", "types")
 
-    def __init__(self, name: str, **kwargs):
+    cdef tuple types
+
+    def __init__(self, str name, **kwargs):
         super().__init__(name, **kwargs)
-        tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
+        cdef str tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
         self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
 
-    def p_type(self, string: str):
+    def p_type(self, str string):
         return tuple(
             tp.p_type(val)
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(tuple value):
         return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
 
-class ArrayType(BaseType):
+cdef class ArrayType(BaseType):
 
     __slots__ = ("name", "type")
 
-    def __init__(self, name: str, **kwargs):
+    cdef BaseType type
+
+    def __init__(self, str name, **kwargs):
         super().__init__(name, **kwargs)
         self.type = what_py_type(
             re.findall(r"^Array\((.*)\)$", name)[0], container=True
         )
 
-    def p_type(self, string: str):
+    cdef p_type(self, str string):
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(list value):
         return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
-class NullableType(BaseType):
+cdef class NullableType(BaseType):
 
     __slots__ = ("name", "type")
-    NULLABLE = {r"\N", "NULL"}
 
-    def __init__(self, name: str, **kwargs):
+    cdef BaseType type
+
+    def __init__(self, str name, **kwargs):
         super().__init__(name, **kwargs)
         self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
 
-    def p_type(self, string: str):
-        if string in self.NULLABLE:
+    cdef p_type(self, str string):
+        if string == r"\N" or string == "NULL":
             return None
         return self.type.p_type(string)
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(value):
         return b"NULL"
 
 
-class NothingType(BaseType):
-    def p_type(self, string: str):
+cdef class NothingType(BaseType):
+    cdef p_type(self, str string):
         return None
 
 
-CH_TYPES_MAPPING = {
+cdef dict CH_TYPES_MAPPING = {
     "UInt8": IntType,
     "UInt16": IntType,
     "UInt32": IntType,
@@ -226,7 +244,7 @@ CH_TYPES_MAPPING = {
     "Nothing": NothingType,
 }
 
-PY_TYPES_MAPPING = {
+cdef dict PY_TYPES_MAPPING = {
     int: IntType,
     float: FloatType,
     str: StrType,
@@ -238,7 +256,7 @@ PY_TYPES_MAPPING = {
 }
 
 
-def what_py_type(name: str, container: bool = False) -> BaseType:
+def what_py_type(str name, bool container = False):
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
@@ -247,7 +265,7 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
         raise ChClientError(f"Unrecognized type name: '{name}'")
 
 
-def py2ch(value):
+cdef py2ch(value):
     return what_ch_type(type(value)).unconvert(value)
 
 
@@ -255,7 +273,7 @@ def rows2ch(*rows):
     return b",".join(TupleType.unconvert(row) for row in rows)
 
 
-def what_ch_type(typ) -> Type[BaseType]:
+cdef what_ch_type(typ):
     try:
         return PY_TYPES_MAPPING[typ]
     except KeyError:
