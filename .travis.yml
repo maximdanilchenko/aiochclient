@@ -5,8 +5,11 @@ matrix:
     - python: 3.7
       dist: xenial
       sudo: true
+env:
+  - WITH_CYTHON=dev-requirements.txt
+  - WITH_CYTHON=dev-requirements-cython.txt
 install:
-  - pip install -r dev-requirements.txt
+  - pip install -r $WITH_CYTHON
   - pip install -e .
 script:
   - pytest tests.py --cov aiochclient

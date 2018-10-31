@@ -1,0 +1,10 @@
+aiohttp
+pytest
+pytest-cov
+pytest-sugar
+pytest-asyncio
+codecov
+sphinx
+sphinx_issues
+sphinx_rtd_theme
+cython
