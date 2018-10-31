@@ -1,4 +1,8 @@
-from aiochclient.types import what_py_type
+# Optional cython extension:
+try:
+    from aiochclient._types import what_py_type
+except ImportError:
+    from aiochclient.types import what_py_type
 
 
 __all__ = ["RecordsFabric"]

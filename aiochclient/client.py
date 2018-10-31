@@ -3,7 +3,12 @@ from typing import Any, AsyncGenerator
 from aiohttp import client
 from aiochclient.records import RecordsFabric
 from aiochclient.exceptions import ChClientError
-from aiochclient.types import rows2ch
+
+# Optional cython extension:
+try:
+    from aiochclient._types import rows2ch
+except ImportError:
+    from aiochclient.types import rows2ch
 
 
 class ChClient:

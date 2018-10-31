@@ -68,7 +68,7 @@ async def bench_selects(*, retries: int, rows: int):
             await client.fetch("SELECT * FROM benchmark_tbl")
             times.append(time.time() - start_time)
     print(
-        f"Average time for selecting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
+        f"- Average time for selecting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
     )
 
 
@@ -87,7 +87,7 @@ async def bench_inserts(*, retries: int, rows: int):
             )
             times.append(time.time() - start_time)
     print(
-        f"Average time for inserting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
+        f"- Average time for inserting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
     )
 
 
@@ -95,7 +95,11 @@ if __name__ == "__main__":
     run(bench_selects(retries=100, rows=1000))
     run(bench_inserts(retries=100, rows=1000))
 """
-Pure python:
-- Average time for selecting 1000 rows (from 100 runs): 0.08974601745605469 seconds
-- Average time for inserting 1000 rows (from 100 runs): 0.032454588413238526 seconds
+Pure Python:
+- Average time for selecting 1000 rows (from 1000 runs): 0.09247343492507934 seconds
+- Average time for inserting 1000 rows (from 1000 runs): 0.032303282737731934 seconds
+
+With Cython ext:
+- Average time for selecting 1000 rows (from 1000 runs): 0.06471260356903076 seconds
+- Average time for inserting 1000 rows (from 1000 runs): 0.019119309902191163 seconds
 """
