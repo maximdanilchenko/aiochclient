@@ -26,13 +26,11 @@ cdef class BaseType:
     cdef str name
     cdef bool container
 
-    __slots__ = ("name", "container")
-
-    def __init__(self, str name, bool container):
+    def __cinit__(self, str name, bool container):
         self.name = name
         self.container = container
 
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         """ Function for implementing specific actions for each type """
         return string
 
@@ -93,7 +91,7 @@ cdef class BaseType:
 
 
 cdef class StrType(BaseType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         if self.container:
             return string.strip("'")
         return string
@@ -105,25 +103,25 @@ cdef class StrType(BaseType):
 
 
 cdef class IntType(BaseType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         return int(string)
 
     @staticmethod
-    def unconvert(int value):
+    def unconvert(value):
         return f"{value}".encode()
 
 
 cdef class FloatType(IntType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         return float(string)
 
     @staticmethod
-    def unconvert(float value):
+    def unconvert(double value):
         return f"{value}".encode()
 
 
 cdef class DateType(BaseType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d").date()
@@ -139,7 +137,7 @@ cdef class DateType(BaseType):
 
 
 cdef class DateTimeType(BaseType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
@@ -156,12 +154,11 @@ cdef class DateTimeType(BaseType):
 
 cdef class TupleType(BaseType):
 
-    __slots__ = ("name", "types")
-
     cdef tuple types
 
-    def __init__(self, str name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __cinit__(self, str name, bool container):
+        self.name = name
+        self.container = container
         cdef str tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
         self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
 
@@ -171,6 +168,9 @@ cdef class TupleType(BaseType):
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
 
+    cpdef convert(self, bytes value):
+        return self.p_type(self.decode(value))
+
     @staticmethod
     def unconvert(tuple value):
         return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
@@ -178,17 +178,16 @@ cdef class TupleType(BaseType):
 
 cdef class ArrayType(BaseType):
 
-    __slots__ = ("name", "type")
-
     cdef BaseType type
 
-    def __init__(self, str name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __cinit__(self, str name, bool container):
+        self.name = name
+        self.container = container
         self.type = what_py_type(
             re.findall(r"^Array\((.*)\)$", name)[0], container=True
         )
 
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
 
     @staticmethod
@@ -198,15 +197,14 @@ cdef class ArrayType(BaseType):
 
 cdef class NullableType(BaseType):
 
-    __slots__ = ("name", "type")
-
     cdef BaseType type
 
-    def __init__(self, str name, **kwargs):
-        super().__init__(name, **kwargs)
+    def __cinit__(self, str name, bool container):
+        self.name = name
+        self.container = container
         self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
 
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         if string == r"\N" or string == "NULL":
             return None
         return self.type.p_type(string)
@@ -217,7 +215,7 @@ cdef class NullableType(BaseType):
 
 
 cdef class NothingType(BaseType):
-    cdef p_type(self, str string):
+    cpdef p_type(self, str string):
         return None
 
 
