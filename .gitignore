@@ -13,4 +13,6 @@
 .DS_Store
 t.py
 *.so
+*.pyd
 *.c
+*.html

@@ -6,7 +6,7 @@ on the part which makes serialize and deserialize part of work
 """
 import time
 import datetime as dt
-from asyncio import run
+import asyncio
 
 from aiohttp import ClientSession
 from aiochclient import ChClient
@@ -91,9 +91,15 @@ async def bench_inserts(*, retries: int, rows: int):
     )
 
 
+async def main():
+    await bench_selects(retries=100, rows=1000)
+    await bench_inserts(retries=100, rows=1000)
+
+
 if __name__ == "__main__":
-    run(bench_selects(retries=100, rows=1000))
-    run(bench_inserts(retries=100, rows=1000))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    loop.close()
 """
 Pure Python:
 - Average time for selecting 1000 rows (from 1000 runs): 0.09247343492507934 seconds

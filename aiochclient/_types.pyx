@@ -34,7 +34,7 @@ cdef class BaseType:
         """ Function for implementing specific actions for each type """
         return string
 
-    cdef str decode(self, bytes val):
+    cdef str _decode(self, bytes val):
         """
         Converting bytes from clickhouse with
         backslash-escaped special characters
@@ -58,6 +58,66 @@ cdef class BaseType:
             d += b[:n]
             b = b[n:]
         return d.decode()
+
+    cdef int find_index(self, unsigned char[:] val, char elem):
+        cdef int i
+        for i in range(val.shape[0]):
+            if val[i] == elem:
+                return i
+        return -1
+
+    cdef str decode(self, const unsigned char[:] sval):
+        # print('started')
+        cdef int dlen, blen, i
+        cdef unsigned char[:] d
+        cdef unsigned char[:] b, val
+        cdef bytes py_string
+        val = sval.copy()
+        cdef int n = self.find_index(val, b"\\")
+        if n < 0:
+            py_string = bytes(val)
+            return py_string.decode()
+        n += 1
+        d = val[:n]
+        b = val[n:]
+        while b.shape[0] > 0:
+            if b[0:1] == b"b":
+                d[n] =  b"\b"
+            # elif b[0:1] == b"N":
+            #     d[n] =  b"\N"
+            elif b[0:1] == b"f":
+                d[n] = b"\f"
+            elif b[0:1] == b"r":
+                d[n] = b"\r"
+            elif b[0:1] == b"n":
+                d[n] = b"\n"
+            elif b[0:1] == b"t":
+                d[n] = b"\t"
+            elif b[0:1] == b"0":
+                d[n] = b" "
+            elif b[0:1] == b"'":
+                d[n] = b"'"
+            elif b[0:1] == b"\\":
+                d[n] = b"\\"
+            else:
+                d[n] = b[0]
+            b = b[1:]
+            n = self.find_index(b, b"\\")
+            if n < 0:
+                dlen = d.shape[0]
+                blen = b.shape[0]
+                for i in range(blen):
+                    d[dlen+i] = b[i]
+                break
+            n += 1
+            dlen = d.shape[0]
+            for i in range(n):
+                d[dlen+i] = b[i]
+            b = b[n:]
+        # print("ended")
+        py_string = bytes(d)
+        return py_string.decode()
+
 
     def seq_parser(self, str raw):
         """
