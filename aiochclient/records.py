@@ -10,13 +10,14 @@ __all__ = ["RecordsFabric"]
 
 class RecordsFabric:
 
-    __slots__ = ("tps",)
+    __slots__ = ("converters",)
 
     def __init__(self, tps: bytes):
-        self.tps = [what_py_type(tp) for tp in tps.decode().strip().split("\t")]
+        self.converters = [what_py_type(tp).convert for tp in tps.decode().strip().split("\t")]
 
     def new(self, vls: bytes):
         vls = vls[:-1]
         if not vls:  # In case of empty row
             return ()
-        return tuple(typ.convert(val) for typ, val in zip(self.tps, vls.split(b"\t")))
+        # return tuple(typ(val) for typ, val in zip(self.converters, splitter(vls)))
+        return tuple(typ(val) for typ, val in zip(self.converters, vls.split(b"\t")))

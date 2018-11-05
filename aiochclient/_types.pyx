@@ -6,25 +6,27 @@ from aiochclient.exceptions import ChClientError
 
 __all__ = ["what_py_type", "rows2ch"]
 
-cdef dict ESC_CHR_MAPPING = {
-    b"b": b"\b",
-    b"N": b"\N",  # NULL
-    b"f": b"\f",
-    b"r": b"\r",
-    b"n": b"\n",
-    b"t": b"\t",
-    b"0": b" ",
-    b"'": b"'",
-    b"\\": b"\\",
-}
 
-cdef str DQ = "'", CM = ","
+cdef:
+    dict ESC_CHR_MAPPING = {
+        b"b": b"\b",
+        b"N": b"\N",  # NULL
+        b"f": b"\f",
+        b"r": b"\r",
+        b"n": b"\n",
+        b"t": b"\t",
+        b"0": b" ",
+        b"'": b"'",
+        b"\\": b"\\",
+    }
+    str DQ = "'", CM = ","
 
 
 cdef class BaseType:
 
-    cdef str name
-    cdef bool container
+    cdef:
+        str name
+        bool container
 
     def __cinit__(self, str name, bool container):
         self.name = name
@@ -34,14 +36,15 @@ cdef class BaseType:
         """ Function for implementing specific actions for each type """
         return string
 
-    cdef str _decode(self, bytes val):
+    cdef str decode(self, bytes val):
         """
         Converting bytes from clickhouse with
         backslash-escaped special characters
         to pythonic string format
         """
-        cdef int n = val.find(b"\\")
-        cdef bytes d, b
+        cdef:
+            int n = val.find(b"\\")
+            bytes d, b
         if n < 0:
             return val.decode()
         n += 1
@@ -59,88 +62,30 @@ cdef class BaseType:
             b = b[n:]
         return d.decode()
 
-    cdef int find_index(self, unsigned char[:] val, char elem):
-        cdef int i
-        for i in range(val.shape[0]):
-            if val[i] == elem:
-                return i
-        return -1
-
-    cdef str decode(self, const unsigned char[:] sval):
-        # print('started')
-        cdef int dlen, blen, i
-        cdef unsigned char[:] d
-        cdef unsigned char[:] b, val
-        cdef bytes py_string
-        val = sval.copy()
-        cdef int n = self.find_index(val, b"\\")
-        if n < 0:
-            py_string = bytes(val)
-            return py_string.decode()
-        n += 1
-        d = val[:n]
-        b = val[n:]
-        while b.shape[0] > 0:
-            if b[0:1] == b"b":
-                d[n] =  b"\b"
-            # elif b[0:1] == b"N":
-            #     d[n] =  b"\N"
-            elif b[0:1] == b"f":
-                d[n] = b"\f"
-            elif b[0:1] == b"r":
-                d[n] = b"\r"
-            elif b[0:1] == b"n":
-                d[n] = b"\n"
-            elif b[0:1] == b"t":
-                d[n] = b"\t"
-            elif b[0:1] == b"0":
-                d[n] = b" "
-            elif b[0:1] == b"'":
-                d[n] = b"'"
-            elif b[0:1] == b"\\":
-                d[n] = b"\\"
-            else:
-                d[n] = b[0]
-            b = b[1:]
-            n = self.find_index(b, b"\\")
-            if n < 0:
-                dlen = d.shape[0]
-                blen = b.shape[0]
-                for i in range(blen):
-                    d[dlen+i] = b[i]
-                break
-            n += 1
-            dlen = d.shape[0]
-            for i in range(n):
-                d[dlen+i] = b[i]
-            b = b[n:]
-        # print("ended")
-        py_string = bytes(d)
-        return py_string.decode()
-
-
-    def seq_parser(self, str raw):
+    cdef list seq_parser(self, str raw):
         """
         Generator for parsing tuples and arrays.
         Returns elements one by one
         """
-        cdef list cur = []
-        cdef str sym
-        cdef int i, length = len(raw)
-        cdef bool blocked = False
+        cdef:
+            list cur = [], res = []
+            str sym
+            int i, length = len(raw)
+            bool blocked = False
         if length == 0:
-            return None
+            return res
         for i in range(length):
             sym = raw[i]
             if sym == CM and not blocked:
-                yield "".join(cur)
+                res.append("".join(cur))
                 cur = []
             elif sym == DQ:
                 blocked = not blocked
                 cur.append(sym)
             else:
                 cur.append(sym)
-        yield "".join(cur)
+        res.append("".join(cur))
+        return res
 
     cpdef convert(self, bytes value):
         return self.p_type(self.decode(value))
@@ -220,11 +165,11 @@ cdef class TupleType(BaseType):
         self.name = name
         self.container = container
         cdef str tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
-        self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
+        self.types = tuple(what_py_type(tp, container=True).p_type for tp in tps.split(","))
 
     def p_type(self, str string):
         return tuple(
-            tp.p_type(val)
+            tp(val)
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
 
