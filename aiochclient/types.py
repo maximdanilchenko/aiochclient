@@ -105,7 +105,7 @@ class IntType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return b"%x" % value
+        return b"%d" % value
 
 
 class FloatType(IntType):
