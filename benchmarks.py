@@ -62,13 +62,13 @@ async def bench_selects(*, retries: int, rows: int):
         await prepare_db(client)
         await insert_rows(client, row_data(), rows)
         # actual testing
-        times = []
+        start_time = time.time()
         for _ in range(retries):
-            start_time = time.time()
             await client.fetch("SELECT * FROM benchmark_tbl")
-            times.append(time.time() - start_time)
+        total_time = time.time() - start_time
+        avg_time = total_time / retries
     print(
-        f"- Average time for selecting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
+        f"- Average time for selecting {rows} rows (from {retries} runs): {avg_time} seconds. Total: {total_time}"
     )
 
 
@@ -78,16 +78,16 @@ async def bench_inserts(*, retries: int, rows: int):
         # prepare environment
         await prepare_db(client)
         # actual testing
-        times = []
         one_row = row_data()
+        start_time = time.time()
         for _ in range(retries):
-            start_time = time.time()
             await client.execute(
                 "INSERT INTO benchmark_tbl VALUES", *(one_row for _ in range(rows))
             )
-            times.append(time.time() - start_time)
+        total_time = time.time() - start_time
+        avg_time = total_time / retries
     print(
-        f"- Average time for inserting {rows} rows (from {retries} runs): {sum(times)/retries} seconds"
+        f"- Average time for inserting {rows} rows (from {retries} runs): {avg_time} seconds. Total: {total_time}"
     )
 
 
