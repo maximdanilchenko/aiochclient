@@ -100,8 +100,7 @@ class StrType(BaseType):
 
 
 class IntType(BaseType):
-    def p_type(self, string: str):
-        return int(string)
+    p_type = int
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -109,8 +108,7 @@ class IntType(BaseType):
 
 
 class FloatType(IntType):
-    def p_type(self, string: str):
-        return float(string)
+    p_type = float
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -128,6 +126,10 @@ class DateType(BaseType):
                 return None
             raise
 
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return b"%a" % str(value)
+
 
 class DateTimeType(BaseType):
     def p_type(self, string: str):
@@ -142,7 +144,7 @@ class DateTimeType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return f"'{value.replace(microsecond=0)}'".encode()
+        return b"%a" % str(value.replace(microsecond=0))
 
 
 class TupleType(BaseType):
