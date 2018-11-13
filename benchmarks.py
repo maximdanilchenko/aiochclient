@@ -92,8 +92,8 @@ async def bench_inserts(*, retries: int, rows: int):
 
 
 async def main():
-    await bench_selects(retries=100, rows=1000)
-    await bench_inserts(retries=100, rows=1000)
+    await bench_selects(retries=1000, rows=1000)
+    await bench_inserts(retries=1000, rows=1000)
 
 
 if __name__ == "__main__":
@@ -106,6 +106,6 @@ Pure Python:
 - Average time for inserting 1000 rows (from 1000 runs): 0.032303282737731934 seconds
 
 With Cython ext:
-- Average time for selecting 1000 rows (from 1000 runs): 0.06471260356903076 seconds
-- Average time for inserting 1000 rows (from 1000 runs): 0.019119309902191163 seconds
+- Average time for selecting 1000 rows (from 1000 runs): 0.061105722188949586 seconds
+- Average time for inserting 1000 rows (from 1000 runs): 0.01820656132698059 seconds
 """

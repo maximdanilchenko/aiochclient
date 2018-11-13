@@ -1,9 +1,9 @@
-from typing import Generator, Any, Type
+from typing import Generator, Any, Callable
 import re
 import datetime as dt
 from aiochclient.exceptions import ChClientError
 
-__all__ = ["what_py_type", "rows2ch"]
+__all__ = ["what_py_converter", "rows2ch"]
 
 
 class BaseType:
@@ -84,7 +84,7 @@ class BaseType:
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return f"'{value}'".encode()
+        return b"%a" % value
 
 
 class StrType(BaseType):
@@ -105,12 +105,16 @@ class IntType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return f"{value}".encode()
+        return b"%x" % value
 
 
 class FloatType(IntType):
     def p_type(self, string: str):
         return float(string)
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return b"%r" % value
 
 
 class DateType(BaseType):
@@ -227,14 +231,14 @@ CH_TYPES_MAPPING = {
 }
 
 PY_TYPES_MAPPING = {
-    int: IntType,
-    float: FloatType,
-    str: StrType,
-    dt.date: DateType,
-    dt.datetime: DateTimeType,
-    tuple: TupleType,
-    list: ArrayType,
-    type(None): NullableType,
+    int: IntType.unconvert,
+    float: FloatType.unconvert,
+    str: StrType.unconvert,
+    dt.date: DateType.unconvert,
+    dt.datetime: DateTimeType.unconvert,
+    tuple: TupleType.unconvert,
+    list: ArrayType.unconvert,
+    type(None): NullableType.unconvert,
 }
 
 
@@ -247,21 +251,22 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
         raise ChClientError(f"Unrecognized type name: '{name}'")
 
 
+def what_py_converter(name: str, container: bool = False) -> Callable:
+    """ Returns needed type class from clickhouse type name """
+    return what_py_type(name, container).convert
+
+
 def py2ch(value):
-    return what_ch_type(type(value)).unconvert(value)
-
-
-def rows2ch(*rows):
-    return b",".join(TupleType.unconvert(row) for row in rows)
-
-
-def what_ch_type(typ) -> Type[BaseType]:
     try:
-        return PY_TYPES_MAPPING[typ]
+        return PY_TYPES_MAPPING[type(value)](value)
     except KeyError:
         raise ChClientError(
-            f"Unrecognized type: '{typ}'. "
+            f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
             f"int, float, str, dt.date, dt.datetime, tuple, list (or None). "
             f"No subclasses yet."
         )
+
+
+def rows2ch(*rows):
+    return b",".join(TupleType.unconvert(row) for row in rows)
