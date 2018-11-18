@@ -1,6 +1,7 @@
-from typing import Generator, Any, Callable
-import re
 import datetime as dt
+import re
+from typing import Generator, Any, Callable, Optional
+
 from aiochclient.exceptions import ChClientError
 
 __all__ = ["what_py_converter", "rows2ch"]
@@ -102,6 +103,9 @@ class StrType(BaseType):
 class IntType(BaseType):
     p_type = int
 
+    def convert(self, value: bytes) -> Any:
+        return self.p_type(value)
+
     @staticmethod
     def unconvert(value) -> bytes:
         return b"%d" % value
@@ -126,6 +130,9 @@ class DateType(BaseType):
                 return None
             raise
 
+    def convert(self, value: bytes) -> Optional[dt.date]:
+        return self.p_type(value.decode())
+
     @staticmethod
     def unconvert(value) -> bytes:
         return b"%a" % str(value)
@@ -142,6 +149,9 @@ class DateTimeType(BaseType):
                 return None
             raise
 
+    def convert(self, value: bytes) -> Optional[dt.datetime]:
+        return self.p_type(value.decode())
+
     @staticmethod
     def unconvert(value) -> bytes:
         return b"%a" % str(value.replace(microsecond=0))
@@ -156,7 +166,7 @@ class TupleType(BaseType):
         tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
         self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
 
-    def p_type(self, string: str):
+    def p_type(self, string: str) -> tuple:
         return tuple(
             tp.p_type(val)
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
@@ -177,7 +187,7 @@ class ArrayType(BaseType):
             re.findall(r"^Array\((.*)\)$", name)[0], container=True
         )
 
-    def p_type(self, string: str):
+    def p_type(self, string: str) -> list:
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
 
     @staticmethod
@@ -194,7 +204,7 @@ class NullableType(BaseType):
         super().__init__(name, **kwargs)
         self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
 
-    def p_type(self, string: str):
+    def p_type(self, string: str) -> Any:
         if string in self.NULLABLE:
             return None
         return self.type.p_type(string)
@@ -205,7 +215,10 @@ class NullableType(BaseType):
 
 
 class NothingType(BaseType):
-    def p_type(self, string: str):
+    def p_type(self, string: str) -> None:
+        return None
+
+    def convert(self, value: bytes) -> None:
         return None
 
 

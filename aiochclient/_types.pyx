@@ -1,4 +1,5 @@
 import re
+
 from cpython cimport datetime as dt
 from cpython cimport bool
 from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString
@@ -100,23 +101,6 @@ cdef class StrType:
 
     cpdef str convert(self, bytes value):
         return self._convert(decode(value))
-
-
-# cdef class IntType:
-#
-#     cdef:
-#         str name
-#         bool container
-#
-#     def __cinit__(self, str name, bool container):
-#         self.name = name
-#         self.container = container
-#
-#     cpdef p_type(self, str string):
-#         return int(string)
-#
-#     cpdef convert(self, bytes value):
-#         return int(value)
 
 
 cdef class Int8Type:

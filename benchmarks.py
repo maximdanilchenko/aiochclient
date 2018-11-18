@@ -4,11 +4,12 @@ any changes in its code. It is useful for comparing its
 results with older versions speed. Results mostly depends
 on the part which makes serialize and deserialize part of work
 """
-import time
-import datetime as dt
 import asyncio
+import datetime as dt
+import time
 
 from aiohttp import ClientSession
+
 from aiochclient import ChClient
 
 

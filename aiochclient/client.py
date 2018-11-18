@@ -1,8 +1,10 @@
 from enum import Enum
 from typing import Any, AsyncGenerator
+
 from aiohttp import client
-from aiochclient.records import RecordsFabric
+
 from aiochclient.exceptions import ChClientError
+from aiochclient.records import RecordsFabric
 
 # Optional cython extension:
 try:
