@@ -7,7 +7,17 @@ from aiochclient import ChClient, ChClientError
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.fixture(params=[{'compress_response': True, 'user': 'default', 'database': 'default'}, {}])
+@pytest.fixture(
+    params=[
+        {
+            "compress_response": True,
+            "user": "default",
+            "password": "",
+            "database": "default",
+        },
+        {},
+    ]
+)
 async def chclient(request):
     async with aiohttp.ClientSession() as s:
         yield ChClient(s, **request.param)
@@ -20,10 +30,17 @@ async def is_alive(chclient):
 
 @pytest.fixture
 async def bad_query(chclient):
-    try:
+    with pytest.raises(ChClientError) as exception:
         await chclient.execute("SELE")
-    except Exception as e:
-        return e
+    return exception
+
+
+@pytest.fixture
+async def bad_select(chclient, all_types_db):
+    with pytest.raises(ChClientError) as exception:
+        await chclient.execute("SELECT * FROM all_types WHERE",
+                               1, 2, 3, 4)
+    return exception
 
 
 @pytest.fixture
@@ -159,6 +176,11 @@ async def test_is_alive(is_alive):
 
 async def test_bad_query(bad_query):
     assert isinstance(bad_query, ChClientError)
+
+
+async def test_bad_select(bad_select):
+    assert isinstance(bad_query, ChClientError)
+    assert bad_select.value == "It is possible to pass arguments only for INSERT queries"
 
 
 async def test_ones(select_one):
