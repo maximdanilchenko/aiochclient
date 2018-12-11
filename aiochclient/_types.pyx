@@ -507,7 +507,7 @@ cdef bytes py2ch(value):
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
-            f"int, float, str, dt.date, dt.datetime, tuple, list (or None). "
+            f"int, float, str, dt.date, dt.datetime, tuple, list, uuid.UUID (or None). "
             f"No subclasses yet."
         )
 
