@@ -7,6 +7,7 @@ on the part which makes serialize and deserialize part of work
 import asyncio
 import datetime as dt
 import time
+import uuid
 
 from aiohttp import ClientSession
 
@@ -26,6 +27,7 @@ def row_data():
         (3, "world"),
         None,
         ["q", "w", "e", "r"],
+        uuid.uuid4(),
     )
 
 
@@ -44,7 +46,8 @@ async def prepare_db(client):
                             h Enum16('hello' = 1, 'world' = 2),
                             i Tuple(UInt8, String),
                             j Nullable(Int8),
-                            k Array(String)
+                            k Array(String),
+                            u UUID
         ) ENGINE = Memory
         """
     )
