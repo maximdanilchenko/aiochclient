@@ -94,7 +94,6 @@ from Clickhouse response and for client INSERT queries.
 | `DateTime` | `da.datetime` |
 | `Tuple(T1, T2, ...)` | `tuple(T1, T2, ...)` |
 | `Array(T)` | `list(T)` |
-| `UUID` | `uuid.UUID` |
 | `Nullable(T)` | `None` or `T` |
 | `Nothing` | `None` |
 
