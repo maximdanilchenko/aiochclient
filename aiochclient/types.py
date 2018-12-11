@@ -1,6 +1,7 @@
 import datetime as dt
 import re
 from typing import Generator, Any, Callable, Optional
+from uuid import UUID
 
 from aiochclient.exceptions import ChClientError
 
@@ -13,7 +14,7 @@ class BaseType:
 
     ESC_CHR_MAPPING = {
         b"b": b"\b",
-        b"N": b"\N",  # NULL
+        b"N": b"\\N",  # NULL
         b"f": b"\f",
         b"r": b"\r",
         b"n": b"\n",
@@ -107,7 +108,7 @@ class IntType(BaseType):
         return self.p_type(value)
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(value: int) -> bytes:
         return b"%d" % value
 
 
@@ -115,7 +116,7 @@ class FloatType(IntType):
     p_type = float
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(value: float) -> bytes:
         return b"%r" % value
 
 
@@ -134,7 +135,7 @@ class DateType(BaseType):
         return self.p_type(value.decode())
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(value: dt.date) -> bytes:
         return b"%a" % str(value)
 
 
@@ -153,8 +154,21 @@ class DateTimeType(BaseType):
         return self.p_type(value.decode())
 
     @staticmethod
-    def unconvert(value) -> bytes:
+    def unconvert(value: dt.datetime) -> bytes:
         return b"%a" % str(value.replace(microsecond=0))
+
+
+class UUIDType(BaseType):
+
+    def p_type(self, string):
+        return UUID(string.strip("'"))
+
+    def convert(self, value: bytes) -> UUID:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value: UUID) -> bytes:
+        return b"%a" % str(value)
 
 
 class TupleType(BaseType):
@@ -243,6 +257,7 @@ CH_TYPES_MAPPING = {
     "Array": ArrayType,
     "Nullable": NullableType,
     "Nothing": NothingType,
+    "UUID": UUIDType,
 }
 
 PY_TYPES_MAPPING = {
@@ -254,6 +269,7 @@ PY_TYPES_MAPPING = {
     tuple: TupleType.unconvert,
     list: ArrayType.unconvert,
     type(None): NullableType.unconvert,
+    UUID: UUIDType.unconvert,
 }
 
 

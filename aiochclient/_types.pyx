@@ -1,4 +1,5 @@
 import re
+from uuid import UUID
 
 from cpython cimport datetime as dt
 from cpython cimport bool
@@ -266,7 +267,7 @@ cdef class DateType:
         self.name = name
         self.container = container
 
-    cdef _convert(self, str string):
+    cdef object _convert(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d").date()
@@ -276,10 +277,10 @@ cdef class DateType:
                 return None
             raise
 
-    cpdef p_type(self, str string):
+    cpdef object p_type(self, str string):
         return self._convert(string)
 
-    cpdef convert(self, bytes value):
+    cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
 
@@ -293,7 +294,7 @@ cdef class DateTimeType:
         self.name = name
         self.container = container
 
-    cdef _convert(self, str string):
+    cdef object _convert(self, str string):
         string = string.strip("'")
         try:
             return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
@@ -303,10 +304,10 @@ cdef class DateTimeType:
                 return None
             raise
 
-    cpdef p_type(self, str string):
+    cpdef object p_type(self, str string):
         return self._convert(string)
 
-    cpdef convert(self, bytes value):
+    cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
 
@@ -403,6 +404,27 @@ cdef class NothingType:
     cpdef void convert(self, bytes value):
         pass
 
+
+cdef class UUIDType:
+
+    cdef:
+        str name
+        bool container
+
+    def __cinit__(self, str name, bool container):
+        self.name = name
+        self.container = container
+
+    cdef object _convert(self, str string):
+        return UUID(string.strip("'"))
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(value.decode())
+
+
 cdef dict CH_TYPES_MAPPING = {
     "UInt8": UInt8Type,
     "UInt16": UInt16Type,
@@ -424,6 +446,7 @@ cdef dict CH_TYPES_MAPPING = {
     "Array": ArrayType,
     "Nullable": NullableType,
     "Nothing": NothingType,
+    "UUID": UUIDType,
 }
 
 
@@ -457,7 +480,7 @@ cdef bytes unconvert_str(str value):
     return PyUnicode_AsEncodedString(PyUnicode_Join("", res), NULL, NULL)
 
 
-cdef bytes unconvert_int(value):
+cdef bytes unconvert_int(object value):
     return b"%d" % value
 
 
@@ -466,12 +489,12 @@ cdef bytes unconvert_float(double value):
     return PyUnicode_AsEncodedString(str(value), NULL, NULL)
 
 
-cdef bytes unconvert_date(value):
+cdef bytes unconvert_date(object value):
     # return f"'{value}'".encode()
     return PyUnicode_AsEncodedString(f"'{value}'", NULL, NULL)
 
 
-cdef bytes unconvert_datetime(value):
+cdef bytes unconvert_datetime(object value):
     # return f"'{value.replace(microsecond=0)}'".encode()
     return PyUnicode_AsEncodedString(f"'{value.replace(microsecond=0)}'", NULL, NULL)
 
@@ -484,8 +507,12 @@ cdef bytes unconvert_array(list value):
     return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
-cdef bytes unconvert_nullable(value):
+cdef bytes unconvert_nullable(object value):
     return b"NULL"
+
+
+cdef bytes unconvert_uuid(object value):
+    return f"'{value}'".encode()
 
 
 cdef dict PY_TYPES_MAPPING = {
@@ -497,6 +524,7 @@ cdef dict PY_TYPES_MAPPING = {
     tuple: unconvert_tuple,
     list: unconvert_array,
     type(None): unconvert_nullable,
+    UUID: unconvert_uuid,
 }
 
 
