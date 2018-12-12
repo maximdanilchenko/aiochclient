@@ -12,6 +12,8 @@
 > pip install aiochclient
 ```
 
+When installing aiochclient will try to build C extensions to boost its speed (about 30% speed up).
+
 ## Quick start
 
 `aiochclient` needs `aiohttp.ClientSession` for connecting:
