@@ -53,7 +53,7 @@ def readme(fname):
 
 setup_opts = dict(
     name='aiochclient',
-    version='0.1.0',
+    version='0.1.1',
     description='Async http clickhouse client for python 3.6+',
     long_description=readme('README.md'),
     long_description_content_type="text/markdown",
