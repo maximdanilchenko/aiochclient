@@ -94,8 +94,8 @@ from Clickhouse response and for client INSERT queries.
 | `Enum16` | `str` |
 | `Date` | `datetime.date` |
 | `DateTime` | `datetime.datetime` |
-| `Tuple(T1, T2, ...)` | `tuple(T1, T2, ...)` |
-| `Array(T)` | `list(T)` |
+| `Tuple(T1, T2, ...)` | `Tuple[T1, T2, ...]` |
+| `Array(T)` | `List[T]` |
 | `UUID` | `uuid.UUID` |
 | `Nullable(T)` | `None` or `T` |
 | `Nothing` | `None` |
