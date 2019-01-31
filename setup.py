@@ -42,7 +42,7 @@ class ve_build_ext(build_ext):
             raise BuildFailed()
 
 
-REQUIRES = ['aiohttp<=3.4.4']
+REQUIRES = ['aiohttp>=3.0.1']
 
 
 def readme(fname):
