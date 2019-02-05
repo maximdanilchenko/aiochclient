@@ -1,5 +1,5 @@
 aiohttp==3.5.4
-pytest
+pytest==4.2.0
 pytest-cov
 pytest-sugar
 pytest-asyncio
