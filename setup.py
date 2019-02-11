@@ -42,10 +42,7 @@ class ve_build_ext(build_ext):
             raise BuildFailed()
 
 
-REQUIRES = ['aiohttp>=3.0.1']
-
-
-def readme(fname):
+def read(fname):
     with open(fname) as fp:
         content = fp.read()
     return content
@@ -55,14 +52,14 @@ setup_opts = dict(
     name='aiochclient',
     version='0.1.1',
     description='Async http clickhouse client for python 3.6+',
-    long_description=readme('README.md'),
+    long_description=read('README.md'),
     long_description_content_type="text/markdown",
     author='Danilchenko Maksim',
     author_email='dmax.dev@gmail.com',
     packages=find_packages(exclude=('test*',)),
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
-    install_requires=REQUIRES,
+    install_requires=read('requirements.txt').split(),
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
