@@ -58,7 +58,8 @@ first value of the first row from query result:
 val = await client.fetchval("SELECT b FROM t WHERE a=2")
 assert val == (dt.date(2018, 9, 8), 3.14)
 ```
-Async iteration on query results steam:
+With async iteration on query results steam you can fetch 
+multiple rows without loading them all into memory at once:
 ```python
 async for row in client.cursor(
     "SELECT number, number*2 FROM system.numbers LIMIT 10000"
@@ -102,5 +103,6 @@ from Clickhouse response and for client INSERT queries.
 
 ## Connection pool
 
-If you use `aiochclient` in web apps, you can limit connection pool size with 
-[aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size).
+If you want to change connection pool size, you can use 
+[aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size). 
+Note that by default pool limit is 100 connections.
