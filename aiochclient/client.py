@@ -215,7 +215,7 @@ class ChClient:
                 return row[0]
         return None
 
-    async def cursor(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+    async def iterate(self, query: str, *args) -> AsyncGenerator[tuple, None]:
         """
         Async generator by all rows from query result.
 
@@ -225,7 +225,7 @@ class ChClient:
 
         .. code-block:: python
 
-            async for row in client.cursor(
+            async for row in client.iterate(
                 "SELECT number, number*2 FROM system.numbers LIMIT 10000"
             ):
                 assert row[0] * 2 == row[1]
@@ -234,3 +234,5 @@ class ChClient:
         """
         async for row in self._execute(query, *args):
             yield row
+
+    cursor = iterate

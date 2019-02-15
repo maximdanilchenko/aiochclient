@@ -267,3 +267,8 @@ class TestFetching:
         assert [
             row async for row in self.ch.cursor("SELECT * FROM all_types")
         ] == self.rows
+
+    async def test_iterate(self):
+        assert [
+            row async for row in self.ch.iterate("SELECT * FROM all_types")
+        ] == self.rows
