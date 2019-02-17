@@ -176,7 +176,7 @@ class ChClient:
         """
         return [row async for row in self._execute(query, *args)]
 
-    async def fetchone(self, query: str, *args) -> tuple or None:
+    async def fetchrow(self, query: str, *args) -> tuple or None:
         """
         Execute query and fetch first row from query result or None.
 
@@ -186,7 +186,7 @@ class ChClient:
 
         .. code-block:: python
 
-            row = await client.fetchone("SELECT * FROM t WHERE a=1")
+            row = await client.fetchrow("SELECT * FROM t WHERE a=1")
             assert row == (1, (dt.date(2018, 9, 7), None))
 
         :return: First row from query or None if there no results.
@@ -194,6 +194,8 @@ class ChClient:
         async for row in self._execute(query, *args):
             return row
         return None
+
+    fetchone = fetchrow  # for backwards compatibility
 
     async def fetchval(self, query: str, *args) -> Any:
         """
@@ -235,4 +237,4 @@ class ChClient:
         async for row in self._execute(query, *args):
             yield row
 
-    cursor = iterate
+    cursor = iterate  # for backwards compatibility

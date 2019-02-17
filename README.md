@@ -47,9 +47,9 @@ For fetching all rows at once use `fetch` method:
 ```python
 all_rows = await client.fetch("SELECT * FROM t")
 ```
-For fetching first row from result use `fetchone` method:
+For fetching first row from result use `fetchrow` method:
 ```python
-row = await client.fetchone("SELECT * FROM t WHERE a=1")
+row = await client.fetchrow("SELECT * FROM t WHERE a=1")
 assert row == (1, (dt.date(2018, 9, 7), None))
 ```
 You can also use `fetchval` method, which returns 
@@ -61,7 +61,7 @@ assert val == (dt.date(2018, 9, 8), 3.14)
 With async iteration on query results steam you can fetch 
 multiple rows without loading them all into memory at once:
 ```python
-async for row in client.cursor(
+async for row in client.iterate(
     "SELECT number, number*2 FROM system.numbers LIMIT 10000"
 ):
     assert row[0] * 2 == row[1]
