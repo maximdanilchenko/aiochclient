@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import Any, AsyncGenerator
+import warnings
 
 from aiohttp import client
 
@@ -195,7 +196,10 @@ class ChClient:
             return row
         return None
 
-    fetchone = fetchrow  # for backwards compatibility
+    async def fetchone(self, query: str, *args) -> tuple or None:
+        """Deprecated. Use 'fetchrow' method instead"""
+        warnings.warn("'fetchone' method is deprecated. Use 'fetchrow' method instead", PendingDeprecationWarning)
+        return await self.fetchrow(query, *args)
 
     async def fetchval(self, query: str, *args) -> Any:
         """
@@ -237,4 +241,8 @@ class ChClient:
         async for row in self._execute(query, *args):
             yield row
 
-    cursor = iterate  # for backwards compatibility
+    async def cursor(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+        """Deprecated. Use 'iterate' method instead"""
+        warnings.warn("'cursor' method is deprecated. Use 'iterate' method instead", PendingDeprecationWarning)
+        async for row in self.iterate(query, *args):
+            yield row
