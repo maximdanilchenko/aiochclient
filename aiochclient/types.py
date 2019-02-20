@@ -159,7 +159,6 @@ class DateTimeType(BaseType):
 
 
 class UUIDType(BaseType):
-
     def p_type(self, string):
         return UUID(string.strip("'"))
 

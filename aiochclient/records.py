@@ -13,7 +13,9 @@ class RecordsFabric:
     __slots__ = ("converters",)
 
     def __init__(self, tps: bytes):
-        self.converters = [what_py_converter(tp) for tp in tps.decode().strip().split("\t")]
+        self.converters = [
+            what_py_converter(tp) for tp in tps.decode().strip().split("\t")
+        ]
 
     def new(self, vls: bytes):
         vls = vls[:-1]
