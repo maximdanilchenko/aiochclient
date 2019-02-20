@@ -1,10 +1,2 @@
--r requirements.txt
-pytest
-pytest-cov
-pytest-sugar
-pytest-asyncio
-codecov
-sphinx
-sphinx_issues
-sphinx_rtd_theme
+-r dev-requirements.txt
 cython
