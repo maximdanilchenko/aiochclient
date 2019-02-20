@@ -69,7 +69,7 @@ async for row in client.iterate(
 
 `ChClient` returns rows as `tuple`s.
 
-Use `fetch`/`fetchrow`/`fetchone` for SELECT queries 
+Use `fetch`/`fetchrow`/`fetchval` for SELECT queries 
 and `execute` or any of last for INSERT and all another queries.
 
 ## Types converting
