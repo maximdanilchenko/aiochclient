@@ -16,3 +16,4 @@ t.py
 *.pyd
 *.c
 *.html
+/venv
