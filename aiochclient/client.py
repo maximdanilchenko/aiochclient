@@ -15,8 +15,7 @@ except ImportError:
 
 
 class ChClient:
-    """
-    ChClient connection class.
+    """ChClient connection class.
 
     Usage:
 
@@ -93,8 +92,7 @@ class ChClient:
         return cls.QueryTypes.OTHER
 
     async def is_alive(self) -> bool:
-        """
-        Checks if connection is Ok.
+        """Checks if connection is Ok.
 
         Usage:
 
@@ -137,8 +135,7 @@ class ChClient:
                     yield rf.new(line)
 
     async def execute(self, query: str, *args) -> list or None:
-        """
-        Execute query. Returns None.
+        """Execute query. Returns None.
 
         :param query: Clickhouse query string.
         :param args: Arguments for insert queries.
@@ -162,8 +159,7 @@ class ChClient:
             return None
 
     async def fetch(self, query: str, *args) -> list:
-        """
-        Execute query and fetch all rows from query result at once in a list.
+        """Execute query and fetch all rows from query result at once in a list.
 
         :param query: Clickhouse query string.
 
@@ -178,8 +174,7 @@ class ChClient:
         return [row async for row in self._execute(query, *args)]
 
     async def fetchrow(self, query: str, *args) -> tuple or None:
-        """
-        Execute query and fetch first row from query result or None.
+        """Execute query and fetch first row from query result or None.
 
         :param query: Clickhouse query string.
 
@@ -205,8 +200,7 @@ class ChClient:
         return await self.fetchrow(query, *args)
 
     async def fetchval(self, query: str, *args) -> Any:
-        """
-        Execute query and fetch first value of the first row from query result or None.
+        """Execute query and fetch first value of the first row from query result or None.
 
         :param query: Clickhouse query string.
 
@@ -225,8 +219,7 @@ class ChClient:
         return None
 
     async def iterate(self, query: str, *args) -> AsyncGenerator[tuple, None]:
-        """
-        Async generator by all rows from query result.
+        """Async generator by all rows from query result.
 
         :param query: Clickhouse query string.
 
