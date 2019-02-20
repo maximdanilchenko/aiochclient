@@ -192,7 +192,7 @@ class ChClient:
         return None
 
     async def fetchone(self, query: str, *args) -> tuple or None:
-        """Deprecated. Use 'fetchrow' method instead"""
+        """Deprecated. Use ``fetchrow`` method instead"""
         warnings.warn(
             "'fetchone' method is deprecated. Use 'fetchrow' method instead",
             PendingDeprecationWarning,
@@ -238,7 +238,7 @@ class ChClient:
             yield row
 
     async def cursor(self, query: str, *args) -> AsyncGenerator[tuple, None]:
-        """Deprecated. Use 'iterate' method instead"""
+        """Deprecated. Use ``iterate`` method instead"""
         warnings.warn(
             "'cursor' method is deprecated. Use 'iterate' method instead",
             PendingDeprecationWarning,
