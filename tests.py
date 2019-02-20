@@ -248,6 +248,18 @@ class TestTypes:
 
 @pytest.mark.usefixtures("class_chclient")
 class TestFetching:
+    async def test_fetchrow_full(self):
+        assert (
+            await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=1")
+            == self.rows[0]
+        )
+
+    async def test_fetchrow_with_empties(self):
+        assert (
+            await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
+            == self.rows[1]
+        )
+
     async def test_fetchone_full(self):
         assert (
             await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=1")
