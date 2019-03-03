@@ -100,6 +100,7 @@ from Clickhouse response and for client INSERT queries.
 | `UUID` | `uuid.UUID` |
 | `Nullable(T)` | `None` or `T` |
 | `Nothing` | `None` |
+| `LowCardinality(T)` | `T` |
 
 ## Connection pool
 
