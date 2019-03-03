@@ -20,13 +20,13 @@ def rows(uuid):
             1,
             1000,
             10000,
-            12345678910,
+            12_345_678_910,
             -4,
             -453,
             21322,
             -32123,
             23.432,
-            -56754.564542,
+            -56754.564_542,
             "hello man",
             "hello fixed man".ljust(32, " "),
             dt.date(2018, 9, 21),
@@ -50,19 +50,19 @@ def rows(uuid):
             "hello man",
             777,
             dt.date(1994, 9, 7),
-            dt.datetime(2018, 9, 21, 10, 32, 23)
+            dt.datetime(2018, 9, 21, 10, 32, 23),
         ),
         (
             2,
             1000,
             10000,
-            12345678910,
+            12_345_678_910,
             -4,
             -453,
             21322,
             -32123,
             23.432,
-            -56754.564542,
+            -56754.564_542,
             "hello man",
             "hello fixed man".ljust(32, " "),
             None,
@@ -83,7 +83,7 @@ def rows(uuid):
             None,
             777,
             dt.date(1994, 9, 7),
-            dt.datetime(2018, 9, 21, 10, 32, 23)
+            dt.datetime(2018, 9, 21, 10, 32, 23),
         ),
     ]
 
@@ -139,7 +139,7 @@ async def all_types_db(chclient, rows):
                             low_cardinality_nullable_str LowCardinality(Nullable(String)),
                             low_cardinality_int LowCardinality(Int32),
                             low_cardinality_date LowCardinality(Date),
-                            low_cardinality_datetime LowCardinality(DateTime)
+                            low_cardinality_datetime LowCardinality(DateTime),
                             
                             ) ENGINE = Memory
     """
@@ -182,7 +182,7 @@ class TestTypes:
         assert await self.select_field("uint32") == 10000
 
     async def test_uint64(self):
-        assert await self.select_field("uint64") == 12345678910
+        assert await self.select_field("uint64") == 12_345_678_910
 
     async def test_int8(self):
         assert await self.select_field("int8") == -4
@@ -200,7 +200,7 @@ class TestTypes:
         assert await self.select_field("float32") == 23.432
 
     async def test_float64(self):
-        assert await self.select_field("float64") == -56754.564542
+        assert await self.select_field("float64") == -56754.564_542
 
     async def test_string(self):
         assert await self.select_field("string") == "hello man"
@@ -273,7 +273,9 @@ class TestTypes:
         assert await self.select_field("low_cardinality_date") == dt.date(1994, 9, 7)
 
     async def test_low_cardinality_datetime(self):
-        assert await self.select_field("low_cardinality_datetime") == dt.datetime(2018, 9, 21, 10, 32, 23)
+        assert await self.select_field("low_cardinality_datetime") == dt.datetime(
+            2018, 9, 21, 10, 32, 23
+        )
 
 
 @pytest.mark.usefixtures("class_chclient")
