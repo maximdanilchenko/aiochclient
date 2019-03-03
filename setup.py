@@ -50,7 +50,7 @@ def read(fname):
 
 setup_opts = dict(
     name='aiochclient',
-    version='0.2.1',
+    version='0.2.2',
     description='Async http clickhouse client for python 3.6+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
