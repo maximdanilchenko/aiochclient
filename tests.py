@@ -46,6 +46,11 @@ def rows(uuid):
                 dt.datetime(2018, 9, 21, 10, 32, 23),
                 dt.datetime(2018, 9, 21, 10, 32, 24),
             ],
+            "hello man",
+            "hello man",
+            777,
+            dt.date(1994, 9, 7),
+            dt.datetime(2018, 9, 21, 10, 32, 23)
         ),
         (
             2,
@@ -74,6 +79,11 @@ def rows(uuid):
             [],
             [],
             [],
+            "hello man",
+            None,
+            777,
+            dt.date(1994, 9, 7),
+            dt.datetime(2018, 9, 21, 10, 32, 23)
         ),
     ]
 
@@ -124,7 +134,12 @@ async def all_types_db(chclient, rows):
                             array_uuid Array(UUID),
                             array_enum Array(Enum8('hello' = 1, 'world' = 2)),
                             array_date Array(Date),
-                            array_datetime Array(DateTime)
+                            array_datetime Array(DateTime),
+                            low_cardinality_str LowCardinality(String),
+                            low_cardinality_nullable_str LowCardinality(Nullable(String)),
+                            low_cardinality_int LowCardinality(Int32),
+                            low_cardinality_date LowCardinality(Date),
+                            low_cardinality_datetime LowCardinality(DateTime)
                             
                             ) ENGINE = Memory
     """
@@ -244,6 +259,21 @@ class TestTypes:
             dt.datetime(2018, 9, 21, 10, 32, 23),
             dt.datetime(2018, 9, 21, 10, 32, 24),
         ]
+
+    async def test_low_cardinality_str(self):
+        assert await self.select_field("low_cardinality_str") == "hello man"
+
+    async def test_low_cardinality_nullable_str(self):
+        assert await self.select_field("low_cardinality_nullable_str") == "hello man"
+
+    async def test_low_cardinality_int(self):
+        assert await self.select_field("low_cardinality_int") == 777
+
+    async def test_low_cardinality_date(self):
+        assert await self.select_field("low_cardinality_date") == dt.date(1994, 9, 7)
+
+    async def test_low_cardinality_datetime(self):
+        assert await self.select_field("low_cardinality_datetime") == dt.datetime(2018, 9, 21, 10, 32, 23)
 
 
 @pytest.mark.usefixtures("class_chclient")

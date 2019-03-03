@@ -235,6 +235,18 @@ class NothingType(BaseType):
         return None
 
 
+class LowCardinalityType(BaseType):
+
+    __slots__ = ("name", "type")
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
+        self.type = what_py_type(re.findall(r"^LowCardinality\((.*)\)$", name)[0])
+
+    def p_type(self, string: str) -> Any:
+        return self.type.p_type(string)
+
+
 CH_TYPES_MAPPING = {
     "UInt8": IntType,
     "UInt16": IntType,
@@ -257,6 +269,7 @@ CH_TYPES_MAPPING = {
     "Nullable": NullableType,
     "Nothing": NothingType,
     "UUID": UUIDType,
+    "LowCardinality": LowCardinalityType,
 }
 
 PY_TYPES_MAPPING = {

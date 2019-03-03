@@ -313,7 +313,6 @@ cdef class DateTimeType:
 
 cdef class TupleType:
 
-
     cdef:
         str name
         bool container
@@ -340,7 +339,6 @@ cdef class TupleType:
 
 cdef class ArrayType:
 
-
     cdef:
         str name
         bool container
@@ -364,7 +362,6 @@ cdef class ArrayType:
 
 
 cdef class NullableType:
-
 
     cdef:
         str name
@@ -425,6 +422,28 @@ cdef class UUIDType:
         return self._convert(value.decode())
 
 
+cdef class LowCardinalityType:
+
+    cdef:
+        str name
+        bool container
+        type
+
+    def __cinit__(self, str name, bool container):
+        self.name = name
+        self.container = container
+        self.type = what_py_type(re.findall(r"^LowCardinality\((.*)\)$", name)[0])
+
+    cdef _convert(self, str string):
+        return self.type.p_type(string)
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(decode(value))
+
+
 cdef dict CH_TYPES_MAPPING = {
     "UInt8": UInt8Type,
     "UInt16": UInt16Type,
@@ -447,6 +466,7 @@ cdef dict CH_TYPES_MAPPING = {
     "Nullable": NullableType,
     "Nothing": NothingType,
     "UUID": UUIDType,
+    "LowCardinality": LowCardinalityType,
 }
 
 
