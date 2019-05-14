@@ -17,7 +17,10 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 html_theme_options = {
-    "description": "Async http(s) clickhouse client for python 3.6+ with types converting and streaming support",
+    "description": (
+        "Async http(s) clickhouse client for python 3.6+ "
+        "with types converting and streaming support"
+    ),
     "show_powered_by": False,
     "display_version": True,
 }
