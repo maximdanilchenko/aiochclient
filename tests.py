@@ -431,13 +431,13 @@ class TestFetching:
         assert id(records[0]._names) == id(records[1]._names)
 
     async def test_record_lazy_decoding(self):
-        record = await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=2")
+        record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         assert type(record._row[0]) == bytes
         record[0]
         assert type(record._row[0]) == int
 
     async def test_record_mapping(self):
-        record = await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=2")
+        record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         assert list(record.values())[0] == 2
         assert list(record.keys())[0] == "uint8"
         assert list(record.items())[0] == ("uint8", 2)
@@ -447,3 +447,7 @@ class TestFetching:
     async def test_record_bool(self):
         records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
         assert bool(records[-2]) is False
+
+    async def test_record_len(self):
+        record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
+        assert len(record) == len(self.rows[1])
