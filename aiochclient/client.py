@@ -17,7 +17,17 @@ except ImportError:
 class ChClient:
     """ChClient connection class.
 
-    se
+    Usage:
+
+    .. code-block:: python
+
+        async with aiohttp.ClientSession() as s:
+            client = ChClient(s, compress_response=True)
+            assert await client.fetch("SELECT number FROM system.numbers LIMIT 100")
+
+    :param aiohttp.ClientSession session:
+        aiohttp client session. Please, use one session
+        and one ChClient for all connections in your app.
 
     :param str url:
         Clickhouse server url. Need full path, like "http://localhost:8123/".
