@@ -3,7 +3,7 @@ format:
 	black .
 
 test:
-	pytest tests.py --cov aiochclient -x
+	pytest tests.py --cov aiochclient -x -v
 
 upload:
 	if [ -d dist ]; then rm -Rf dist; fi
