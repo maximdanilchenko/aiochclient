@@ -16,7 +16,8 @@ install:
   - pip install -r $WITH_CYTHON
   - pip install -e .
 script:
-  - pytest tests.py --cov aiochclient
+  - make check_format
+  - make test
 after_success: codecov
 sudo: required
 services:
