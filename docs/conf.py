@@ -1,6 +1,6 @@
+import datetime as dt
 import os
 import sys
-import datetime as dt
 
 sys.path.insert(0, os.path.abspath(".."))
 

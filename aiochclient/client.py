@@ -1,6 +1,6 @@
+import warnings
 from enum import Enum
 from typing import Any, AsyncGenerator
-import warnings
 
 from aiohttp import client
 
@@ -17,17 +17,7 @@ except ImportError:
 class ChClient:
     """ChClient connection class.
 
-    Usage:
-
-    .. code-block:: python
-
-        async with aiohttp.ClientSession() as s:
-            client = ChClient(s, compress_response=True)
-            assert await client.fetch("SELECT number FROM system.numbers LIMIT 100")
-
-    :param aiohttp.ClientSession session:
-        aiohttp client session. Please, use one session
-        and one ChClient for all connections in your app.
+    se
 
     :param str url:
         Clickhouse server url. Need full path, like "http://localhost:8123/".
@@ -129,8 +119,10 @@ class ChClient:
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode())
             if query_type == self.QueryTypes.FETCH:
-                await resp.content.readline()
-                rf = RecordsFabric(await resp.content.readline())
+                rf = RecordsFabric(
+                    names=await resp.content.readline(),
+                    tps=await resp.content.readline(),
+                )
                 async for line in resp.content:
                     yield rf.new(line)
 

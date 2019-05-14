@@ -1,12 +1,11 @@
 from distutils.command.build_ext import build_ext
-from distutils.errors import (CCompilerError, DistutilsExecError,
-                              DistutilsPlatformError)
-from setuptools import find_packages
-from setuptools import setup, Extension
+from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 
+from setuptools import Extension, find_packages, setup
 
 try:
     from Cython.Build import cythonize
+
     USE_CYTHON = True
 except ImportError:
     USE_CYTHON = False
@@ -37,8 +36,7 @@ class ve_build_ext(build_ext):
     def build_extension(self, ext):
         try:
             build_ext.build_extension(self, ext)
-        except (CCompilerError, DistutilsExecError,
-                DistutilsPlatformError, ValueError):
+        except (CCompilerError, DistutilsExecError, DistutilsPlatformError, ValueError):
             raise BuildFailed()
 
 

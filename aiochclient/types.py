@@ -1,6 +1,6 @@
 import datetime as dt
 import re
-from typing import Generator, Any, Callable, Optional
+from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
 from aiochclient.exceptions import ChClientError
