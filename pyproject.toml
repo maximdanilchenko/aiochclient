@@ -1,0 +1,11 @@
+[tool.black]
+include = '\.py$'
+skip-string-normalization = true
+py36 = true
+exclude = '''
+(
+    migrations/
+  | protobuffers/
+  | venv/
+)
+'''
