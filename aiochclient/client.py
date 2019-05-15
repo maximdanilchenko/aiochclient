@@ -1,17 +1,23 @@
 import warnings
 from enum import Enum
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, List, Optional
 
 from aiohttp import client
 
 from aiochclient.exceptions import ChClientError
-from aiochclient.records import RecordsFabric
+from aiochclient.records import RecordsFabric, Record
 
 # Optional cython extension:
 try:
     from aiochclient._types import rows2ch
 except ImportError:
     from aiochclient.types import rows2ch
+
+
+class QueryTypes(Enum):
+    FETCH = 0
+    INSERT = 1
+    OTHER = 2
 
 
 class ChClient:
@@ -48,11 +54,6 @@ class ChClient:
 
     __slots__ = ("_session", "url", "params")
 
-    class QueryTypes(Enum):
-        FETCH = 0
-        INSERT = 1
-        OTHER = 2
-
     def __init__(
         self,
         session: client.ClientSession,
@@ -76,7 +77,7 @@ class ChClient:
             self.params["enable_http_compression"] = 1
 
     @classmethod
-    def query_type(cls, query):
+    def query_type(cls, query: str) -> QueryTypes:
         check = query.lstrip()[:8].upper()
         if any(
             [
@@ -86,10 +87,10 @@ class ChClient:
                 check.startswith("EXISTS"),
             ]
         ):
-            return cls.QueryTypes.FETCH
+            return QueryTypes.FETCH
         if check.startswith("INSERT"):
-            return cls.QueryTypes.INSERT
-        return cls.QueryTypes.OTHER
+            return QueryTypes.INSERT
+        return QueryTypes.OTHER
 
     async def is_alive(self) -> bool:
         """Checks if connection is Ok.
@@ -107,13 +108,13 @@ class ChClient:
         ) as resp:  # type: client.ClientResponse
             return resp.status == 200
 
-    async def _execute(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+    async def _execute(self, query: str, *args) -> AsyncGenerator[Record, None]:
         query_type = self.query_type(query)
 
-        if query_type == self.QueryTypes.FETCH:
+        if query_type == QueryTypes.FETCH:
             query += " FORMAT TSVWithNamesAndTypes"
         if args:
-            if query_type != self.QueryTypes.INSERT:
+            if query_type != QueryTypes.INSERT:
                 raise ChClientError(
                     "It is possible to pass arguments only for INSERT queries"
                 )
@@ -128,7 +129,7 @@ class ChClient:
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode())
-            if query_type == self.QueryTypes.FETCH:
+            if query_type == QueryTypes.FETCH:
                 rf = RecordsFabric(
                     names=await resp.content.readline(),
                     tps=await resp.content.readline(),
@@ -136,7 +137,7 @@ class ChClient:
                 async for line in resp.content:
                     yield rf.new(line)
 
-    async def execute(self, query: str, *args) -> list or None:
+    async def execute(self, query: str, *args) -> None:
         """Execute query. Returns None.
 
         :param query: Clickhouse query string.
@@ -160,7 +161,7 @@ class ChClient:
         async for _ in self._execute(query, *args):
             return None
 
-    async def fetch(self, query: str, *args) -> list:
+    async def fetch(self, query: str, *args) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
         :param query: Clickhouse query string.
@@ -175,7 +176,7 @@ class ChClient:
         """
         return [row async for row in self._execute(query, *args)]
 
-    async def fetchrow(self, query: str, *args) -> tuple or None:
+    async def fetchrow(self, query: str, *args) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
         :param query: Clickhouse query string.
@@ -193,7 +194,7 @@ class ChClient:
             return row
         return None
 
-    async def fetchone(self, query: str, *args) -> tuple or None:
+    async def fetchone(self, query: str, *args) -> Optional[Record]:
         """Deprecated. Use ``fetchrow`` method instead"""
         warnings.warn(
             "'fetchone' method is deprecated. Use 'fetchrow' method instead",
@@ -220,7 +221,7 @@ class ChClient:
                 return row[0]
         return None
 
-    async def iterate(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+    async def iterate(self, query: str, *args) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
         :param query: Clickhouse query string.
@@ -239,7 +240,7 @@ class ChClient:
         async for row in self._execute(query, *args):
             yield row
 
-    async def cursor(self, query: str, *args) -> AsyncGenerator[tuple, None]:
+    async def cursor(self, query: str, *args) -> AsyncGenerator[Record, None]:
         """Deprecated. Use ``iterate`` method instead"""
         warnings.warn(
             "'cursor' method is deprecated. Use 'iterate' method instead",
