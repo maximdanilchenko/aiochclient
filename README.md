@@ -1,5 +1,5 @@
 # aiochclient
-### Async http(s) clickhouse client for python 3.6+ with types converting in both directions and streaming support
+### Async http(s) clickhouse client for python 3.6+ with types converting in both directions, streaming support, lazy decoding on select queries and fully typed interface
 
 [![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
 [![Travis CI](https://travis-ci.org/maximdanilchenko/aiochclient.svg?branch=master)](https://travis-ci.org/maximdanilchenko/aiochclient)
@@ -12,9 +12,11 @@
 > pip install aiochclient
 ```
 
-When installing aiochclient will try to build C extensions to boost its speed (about 30% speed up).
+While installing it will try to build C extensions speed boost (about 30% speed up).
 
 ## Quick start
+
+### Connecting to Clickhouse
 
 `aiochclient` needs `aiohttp.ClientSession` for connecting:
 
@@ -29,13 +31,14 @@ async def main():
         assert await client.is_alive()  # returns True if connection is Ok
 
 ```
-## Query examples
+
+### Query examples
 ```python
 await client.execute(
     "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
 )
 ```
-For INSERT queries you can pass values as `*args`. Values should be iterables.
+For INSERT queries you can pass values as `*args`. Values should be iterables:
 ```python
 await client.execute(
     "INSERT INTO t VALUES",
@@ -50,12 +53,15 @@ all_rows = await client.fetch("SELECT * FROM t")
 For fetching first row from result use `fetchrow` method:
 ```python
 row = await client.fetchrow("SELECT * FROM t WHERE a=1")
-assert row == (1, (dt.date(2018, 9, 7), None))
+
+assert row[0] == 1
+assert row["b"] == (dt.date(2018, 9, 7), None)
 ```
 You can also use `fetchval` method, which returns 
 first value of the first row from query result:
 ```python
 val = await client.fetchval("SELECT b FROM t WHERE a=2")
+
 assert val == (dt.date(2018, 9, 8), 3.14)
 ```
 With async iteration on query results steam you can fetch 
@@ -66,8 +72,21 @@ async for row in client.iterate(
 ):
     assert row[0] * 2 == row[1]
 ```
+### Working with query results
+All fetch queries return rows as lightweight, memory 
+efficient objects with full mapping interface, where 
+you can get fields by names or by indexes: 
+```python
+row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
 
-`ChClient` returns rows as `tuple`s.
+assert row["a"] == 1
+assert row[0] == 1
+assert row[:] == (1, (dt.date(2018, 9, 8), 3.14))
+assert list(row.keys()) == ["a", "b"]
+assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
+```
+
+------
 
 Use `fetch`/`fetchrow`/`fetchval` for SELECT queries 
 and `execute` or any of last for INSERT and all another queries.

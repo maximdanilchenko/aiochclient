@@ -13,6 +13,22 @@ __all__ = ["RecordsFabric", "Record"]
 
 
 class Record(Mapping):
+    """Lightweight, memory efficient objects with full mapping interface, where
+    you can get fields by names or by indexes.
+
+    Usage:
+
+    .. code-block:: python
+
+        row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
+
+        assert row["a"] == 1
+        assert row[0] == 1
+        assert row[:] == (1, (dt.date(2018, 9, 8), 3.14))
+        assert list(row.keys()) == ["a", "b"]
+        assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
+
+    """
 
     __slots__ = ("_converters", "_decoded", "_names", "_row")
 
