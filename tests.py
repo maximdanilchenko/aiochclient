@@ -428,18 +428,22 @@ class TestFetching:
             row[:] async for row in self.ch.iterate("SELECT * FROM all_types")
         ] == self.rows
 
-    async def test_records_common_objects(self):
+
+@pytest.mark.record
+@pytest.mark.usefixtures("class_chclient")
+class TestRecord:
+    async def test_common_objects(self):
         records = await self.ch.fetch("SELECT * FROM all_types")
         assert id(records[0]._converters) == id(records[1]._converters)
         assert id(records[0]._names) == id(records[1]._names)
 
-    async def test_record_lazy_decoding(self):
+    async def test_lazy_decoding(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         assert type(record._row[0]) == bytes
         record[0]
         assert type(record._row[0]) == int
 
-    async def test_record_mapping(self):
+    async def test_mapping(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         assert list(record.values())[0] == 2
         assert list(record.keys())[0] == "uint8"
@@ -447,10 +451,26 @@ class TestFetching:
         assert record.get("uint8") == 2
         assert record.get(0) == 2
 
-    async def test_record_bool(self):
+    async def test_bool(self):
         records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
         assert bool(records[-2]) is False
 
-    async def test_record_len(self):
+    async def test_len(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         assert len(record) == len(self.rows[1])
+
+    async def test_index_error(self):
+        record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
+        with pytest.raises(IndexError):
+            record[42]
+        records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
+        with pytest.raises(IndexError):
+            records[-2][0]
+
+    async def test_key_error(self):
+        record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
+        with pytest.raises(KeyError):
+            record["no_such_key"]
+        records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
+        with pytest.raises(KeyError):
+            records[-2]["a"]
