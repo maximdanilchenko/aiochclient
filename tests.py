@@ -154,6 +154,7 @@ def class_chclient(chclient, all_types_db, rows, request):
     request.cls.rows = rows
 
 
+@pytest.mark.client
 @pytest.mark.usefixtures("class_chclient")
 class TestClient:
     async def test_is_alive(self):
@@ -168,6 +169,7 @@ class TestClient:
             await self.ch.execute("SELECT * FROM all_types WHERE", 1, 2, 3, 4)
 
 
+@pytest.mark.types
 @pytest.mark.usefixtures("class_chclient")
 class TestTypes:
     async def select_field(self, field):
@@ -389,6 +391,7 @@ class TestTypes:
         )
 
 
+@pytest.mark.fetching
 @pytest.mark.usefixtures("class_chclient")
 class TestFetching:
     async def test_fetchrow_full(self):
