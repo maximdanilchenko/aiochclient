@@ -29,7 +29,7 @@ class ChClient:
 
         async with aiohttp.ClientSession() as s:
             client = ChClient(s, compress_response=True)
-            assert await client.fetch("SELECT number FROM system.numbers LIMIT 100")
+            nums = await client.fetch("SELECT number FROM system.numbers LIMIT 100")
 
     :param aiohttp.ClientSession session:
         aiohttp client session. Please, use one session
@@ -186,7 +186,8 @@ class ChClient:
         .. code-block:: python
 
             row = await client.fetchrow("SELECT * FROM t WHERE a=1")
-            assert row == (1, (dt.date(2018, 9, 7), None))
+            assert row[0] == 1
+            assert row["b"] == (dt.date(2018, 9, 7), None)
 
         :return: First row from query or None if there no results.
         """
@@ -224,7 +225,7 @@ class ChClient:
     async def iterate(self, query: str, *args) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
-        :param query: Clickhouse query string.
+        :param str query: Clickhouse query string.
 
         Usage:
 
