@@ -74,7 +74,8 @@ async for row in client.iterate(
 ```
 ### Working with query results
 All fetch queries return rows as lightweight, memory 
-efficient objects with full mapping interface, where 
+efficient objects (**from v`1.0.0`, before it - just tuples**)
+with full mapping interface, where 
 you can get fields by names or by indexes: 
 ```python
 row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
