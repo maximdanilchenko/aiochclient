@@ -5,7 +5,7 @@ from typing import Any, AsyncGenerator, List, Optional
 from aiohttp import client
 
 from aiochclient.exceptions import ChClientError
-from aiochclient.records import RecordsFabric, Record
+from aiochclient.records import Record, RecordsFabric
 
 # Optional cython extension:
 try:

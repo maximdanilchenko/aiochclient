@@ -56,13 +56,17 @@ class Record(Mapping):
                 return self._row[self._names[key]]
             except KeyError:
                 if not self._row:
-                    raise KeyError("Empty row. May be it is result of 'WITH TOTALS' query.")
+                    raise KeyError(
+                        "Empty row. May be it is result of 'WITH TOTALS' query."
+                    )
                 raise KeyError(f"No fields with name '{key}'")
         try:
             return self._row[key]
         except IndexError:
             if not self._row:
-                raise IndexError("Empty row. May be it is result of 'WITH TOTALS' query.")
+                raise IndexError(
+                    "Empty row. May be it is result of 'WITH TOTALS' query."
+                )
             raise IndexError(f"No fields with index '{key}'")
 
     def __iter__(self) -> Iterator:
