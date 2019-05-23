@@ -1,5 +1,6 @@
 import datetime as dt
 import re
+from abc import ABC, abstractmethod
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from aiochclient.exceptions import ChClientError
 __all__ = ["what_py_converter", "rows2ch"]
 
 
-class BaseType:
+class BaseType(ABC):
 
     __slots__ = ("name", "container")
 
@@ -31,9 +32,9 @@ class BaseType:
         self.name = name
         self.container = container
 
+    @abstractmethod
     def p_type(self, string):
         """ Function for implementing specific actions for each type """
-        return string
 
     @classmethod
     def decode(cls, val: bytes) -> str:

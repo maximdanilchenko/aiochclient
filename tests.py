@@ -404,6 +404,11 @@ class TestFetching:
             :
         ] == self.rows[1]
 
+    async def test_fetchrow_none_result(self):
+        assert (
+            await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=42")
+        ) is None
+
     async def test_fetchone_full(self):
         assert (await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=1"))[
             :
@@ -413,6 +418,16 @@ class TestFetching:
         assert (await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=2"))[
             :
         ] == self.rows[1]
+
+    async def test_fetchone_none_result(self):
+        assert (
+            await self.ch.fetchone("SELECT * FROM all_types WHERE uint8=42")
+        ) is None
+
+    async def test_fetchval_none_result(self):
+        assert (
+            await self.ch.fetchval("SELECT uint8 FROM all_types WHERE uint8=42")
+        ) is None
 
     async def test_fetch(self):
         rows = await self.ch.fetch("SELECT * FROM all_types")
@@ -428,6 +443,9 @@ class TestFetching:
             row[:] async for row in self.ch.iterate("SELECT * FROM all_types")
         ] == self.rows
 
+    async def test_select_with_execute(self):
+        assert (await self.ch.execute("SELECT * FROM all_types WHERE uint8=1")) is None
+
 
 @pytest.mark.record
 @pytest.mark.usefixtures("class_chclient")
@@ -439,8 +457,9 @@ class TestRecord:
 
     async def test_lazy_decoding(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
-        assert type(record._row[0]) == bytes
+        assert type(record._row) == bytes
         record[0]
+        assert type(record._row) == tuple
         assert type(record._row[0]) == int
 
     async def test_mapping(self):
