@@ -32,7 +32,7 @@ async def main():
 
 ```
 
-### Query examples
+### Making queries
 ```python
 await client.execute(
     "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
