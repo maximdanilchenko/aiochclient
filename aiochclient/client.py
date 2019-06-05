@@ -128,7 +128,7 @@ class ChClient:
             self.url, params=params, data=data
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
-                raise ChClientError((await resp.read()).decode())
+                raise ChClientError((await resp.read()).decode(errors='replace'))
             if query_type == QueryTypes.FETCH:
                 rf = RecordsFabric(
                     names=await resp.content.readline(),
