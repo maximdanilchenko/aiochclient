@@ -136,6 +136,6 @@ libraries are recommended for sake of speed.
 As for the last version of `aiochclient` its speed 
 using one task (without gather or parallel 
 clients and so on) is about 
-**180k-220k** rows/sec on SELECT and about 
+**180k-220k rows/sec** on SELECT and about 
 **50k-80k rows/sec** on INSERT queries 
 depending on its environment and clickhouse settings.
