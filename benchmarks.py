@@ -3,6 +3,23 @@ This module is used for testing speed of aiochclient after
 any changes in its code. It is useful for comparing its
 results with older versions speed. Results mostly depends
 on the part which makes serialize and deserialize part of work
+
+=== Last Results ============================================
+== Python 3.7.1 (v3.7.1:260ec2c36a, Oct 20 2018, 03:13:28) ==
+= Pure Python ===============================================
+- Avg time for selecting 10000 rows from 100 runs: 0.047670061588287356 sec. Total: 4.767006158828735
+  Speed: 209775.26914832063 rows/sec
+- Avg time for selecting 10000 rows from 100 runs: 0.7206034588813782 sec (with decoding). Total: 72.06034588813782
+  Speed: 13877.257840981505 rows/sec
+- Avg time for inserting 10000 rows from 100 runs: 0.21813016176223754 sec. Total: 21.813016176223755
+  Speed: 45844.18733847558 rows/sec
+= With Cython ext ===========================================
+- Avg time for selecting 10000 rows from 100 runs: 0.04855584144592285 sec. Total: 4.855584144592285
+  Speed: 205948.44414625384 rows/sec
+- Avg time for selecting 10000 rows from 100 runs: 0.5195666408538818 sec (with decoding). Total: 51.956664085388184
+  Speed: 19246.809193841815 rows/sec
+- Avg time for inserting 10000 rows from 100 runs: 0.14293188810348512 sec. Total: 14.29318881034851
+  Speed: 69963.39398217303 rows/sec
 """
 import asyncio
 import datetime as dt
@@ -10,6 +27,7 @@ import time
 import uuid
 
 from aiohttp import ClientSession
+import uvloop
 
 from aiochclient import ChClient
 
@@ -71,9 +89,11 @@ async def bench_selects(*, retries: int, rows: int):
             await client.fetch("SELECT * FROM benchmark_tbl")
         total_time = time.time() - start_time
         avg_time = total_time / retries
+        speed = int(1 / avg_time * rows)
     print(
         f"- Avg time for selecting {rows} rows from {retries} runs: {avg_time} sec. Total: {total_time}"
     )
+    print(f"  Speed: {speed} rows/sec")
 
 
 async def bench_selects_with_decoding(*, retries: int, rows: int):
@@ -90,9 +110,11 @@ async def bench_selects_with_decoding(*, retries: int, rows: int):
             selected_rows = [row[0] for row in selected_rows]
         total_time = time.time() - start_time
         avg_time = total_time / retries
+        speed = int(1 / avg_time * rows)
     print(
         f"- Avg time for selecting {rows} rows from {retries} runs: {avg_time} sec (with decoding). Total: {total_time}"
     )
+    print(f"  Speed: {speed} rows/sec")
 
 
 async def bench_inserts(*, retries: int, rows: int):
@@ -109,39 +131,21 @@ async def bench_inserts(*, retries: int, rows: int):
             )
         total_time = time.time() - start_time
         avg_time = total_time / retries
+        speed = int(1 / avg_time * rows)
     print(
         f"- Avg time for inserting {rows} rows from {retries} runs: {avg_time} sec. Total: {total_time}"
     )
+    print(f"  Speed: {speed} rows/sec")
 
 
 async def main():
-    await bench_selects(retries=1000, rows=1000)
-    await bench_selects_with_decoding(retries=1000, rows=1000)
-    await bench_inserts(retries=1000, rows=1000)
+    await bench_selects(retries=100, rows=10000)
+    await bench_selects_with_decoding(retries=100, rows=10000)
+    await bench_inserts(retries=100, rows=10000)
 
 
 if __name__ == "__main__":
+    uvloop.install()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
     loop.close()
-"""
-Python 3.7.1 (v3.7.1:260ec2c36a, Oct 20 2018, 03:13:28)
-Pure Python:
-- Avg time for selecting 1000 rows from 1000 runs: 0.09247343492507934 sec
-- Avg time for inserting 1000 rows from 1000 runs: 0.032303282737731934 sec
-
-With Cython ext:
-- Avg time for selecting 1000 rows from 1000 runs: 0.061105722188949586 sec
-- Avg time for inserting 1000 rows from 1000 runs: 0.01820656132698059 sec
-
-With lazy decoding:
-Pure Python:
-- Avg time for selecting 1000 rows from 1000 runs: 0.00917806601524353 sec.
-- Avg time for selecting 1000 rows from 1000 runs: 0.08189528131484985 sec (with decoding).
-- Avg time for inserting 1000 rows from 1000 runs: 0.027863742113113404 sec.
-
-With Cython ext:
-- Avg time for selecting 1000 rows from 1000 runs: 0.009102407217025757 sec.
-- Avg time for selecting 1000 rows from 1000 runs: 0.05832741093635559 sec (with decoding).
-- Avg time for inserting 1000 rows from 1000 runs: 0.01853747296333313 sec.
-"""

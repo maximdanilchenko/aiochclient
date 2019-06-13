@@ -127,3 +127,15 @@ from Clickhouse response and for client INSERT queries.
 If you want to change connection pool size, you can use 
 [aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size). 
 Note that by default pool limit is 100 connections.
+
+## Speed
+
+Using of `uvloop`, `cChardet` and `aiodns` 
+libraries are recommended for sake of speed. 
+
+As for the last version of `aiochclient` its speed 
+using one task (without gather or parallel 
+clients and so on) is about 
+**180k-220k** rows/sec on SELECT and about 
+**50k-80k rows/sec** on INSERT queries 
+depending on its environment and clickhouse settings.
