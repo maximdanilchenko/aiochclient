@@ -26,8 +26,8 @@ import datetime as dt
 import time
 import uuid
 
-from aiohttp import ClientSession
 import uvloop
+from aiohttp import ClientSession
 
 from aiochclient import ChClient
 
