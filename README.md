@@ -80,6 +80,10 @@ async for row in client.iterate(
 ):
     assert row[0] * 2 == row[1]
 ```
+
+Use `fetch`/`fetchrow`/`fetchval`/`iterate` for SELECT queries 
+and `execute` or any of last for INSERT and all another queries.
+
 ### Working with query results
 All fetch queries return rows as lightweight, memory 
 efficient objects (**from v`1.0.0`, before it - just tuples**)
@@ -94,11 +98,6 @@ assert row[:] == (1, (dt.date(2018, 9, 8), 3.14))
 assert list(row.keys()) == ["a", "b"]
 assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 ```
-
-------
-
-Use `fetch`/`fetchrow`/`fetchval` for SELECT queries 
-and `execute` or any of last for INSERT and all another queries.
 
 ## Types converting
 
@@ -147,3 +146,7 @@ clients and so on) is about
 **180k-220k rows/sec** on SELECT and about 
 **50k-80k rows/sec** on INSERT queries 
 depending on its environment and clickhouse settings.
+
+------
+
+Please ⭐️ this repository if this project helped you!
