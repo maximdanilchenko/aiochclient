@@ -73,9 +73,7 @@ class Record(Mapping):
             return None
         self._row = tuple(
             converter(val)
-            for converter, val in zip(
-                self._converters, self._row[:-1].split(b"\t")
-            )  # [:-1] because of delimiter
+            for converter, val in zip(self._converters, self._row.split(b"\t"))
         )
         self._decoded = True
 
@@ -92,4 +90,8 @@ class RecordsFabric:
         ]
 
     def new(self, row: bytes) -> Record:
-        return Record(row=row, names=self.names, converters=self.converters)
+        return Record(
+            row=row[:-1],  # because of delimiter
+            names=self.names,
+            converters=self.converters,
+        )
