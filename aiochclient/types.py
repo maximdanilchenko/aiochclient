@@ -9,6 +9,12 @@ from aiochclient.exceptions import ChClientError
 __all__ = ["what_py_converter", "rows2ch"]
 
 
+RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
+RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
+RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
+
+
 class BaseType(ABC):
 
     __slots__ = ("name", "container")
@@ -177,7 +183,7 @@ class TupleType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
+        tps = RE_TUPLE.findall(name)[0]
         self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
 
     def p_type(self, string: str) -> tuple:
@@ -197,9 +203,7 @@ class ArrayType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(
-            re.findall(r"^Array\((.*)\)$", name)[0], container=True
-        )
+        self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
         return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
@@ -216,7 +220,7 @@ class NullableType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
+        self.type = what_py_type(RE_NULLABLE.findall(name)[0])
 
     def p_type(self, string: str) -> Any:
         if string in self.NULLABLE:
@@ -242,7 +246,7 @@ class LowCardinalityType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(re.findall(r"^LowCardinality\((.*)\)$", name)[0])
+        self.type = what_py_type(RE_LOW_CARDINALITY.findall(name)[0])
 
     def p_type(self, string: str) -> Any:
         return self.type.p_type(string)

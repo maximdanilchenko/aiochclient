@@ -16,6 +16,11 @@ __all__ = ["what_py_converter", "rows2ch"]
 DEF DQ = "'"
 DEF CM = ","
 
+RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
+RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
+RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
+
 
 cdef str decode(char* val):
     """
@@ -329,7 +334,7 @@ cdef class TupleType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        cdef str tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
+        cdef str tps = RE_TUPLE.findall(name)[0]
         self.types = tuple(what_py_type(tp, container=True).p_type for tp in tps.split(","))
 
     cdef tuple _convert(self, str string):
@@ -356,7 +361,7 @@ cdef class ArrayType:
         self.name = name
         self.container = container
         self.type = what_py_type(
-            re.findall(r"^Array\((.*)\)$", name)[0], container=True
+            RE_ARRAY.findall(name)[0], container=True
         )
 
     cdef list _convert(self, str string):
@@ -379,7 +384,7 @@ cdef class NullableType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
+        self.type = what_py_type(RE_NULLABLE.findall(name)[0])
 
     cdef _convert(self, str string):
         if string == r"\N" or string == "NULL":
@@ -440,7 +445,7 @@ cdef class LowCardinalityType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        self.type = what_py_type(re.findall(r"^LowCardinality\((.*)\)$", name)[0])
+        self.type = what_py_type(RE_LOW_CARDINALITY.findall(name)[0])
 
     cdef _convert(self, str string):
         return self.type.p_type(string)
