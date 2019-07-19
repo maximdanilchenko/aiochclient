@@ -14,7 +14,7 @@ upload: build
 
 check_format:
 	isort --check --diff
-	black . --check --diff
+	black . --check --diff --target-version py36
 
 build:
 	 python setup.py build_ext --inplace
