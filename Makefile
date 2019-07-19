@@ -5,6 +5,8 @@ format:
 test:
 	pytest tests.py --cov aiochclient -x -v
 
+tests: test
+
 upload: build
 	if [ -d dist ]; then rm -Rf dist; fi
 	python setup.py sdist
