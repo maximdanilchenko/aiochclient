@@ -96,8 +96,9 @@ def rows(uuid):
             "user": "default",
             "password": "",
             "database": "default",
+            "allow_suspicious_low_cardinality_types": 1,
         },
-        {},
+        {"allow_suspicious_low_cardinality_types": 1},
     ]
 )
 async def chclient(request):

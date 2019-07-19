@@ -50,6 +50,9 @@ class ChClient:
     :param bool compress_response:
         Pass True if you want Clickhouse to compress its responses with gzip.
         They will be decompressed automatically. But overall it will be slightly slower.
+
+    :param **settings:
+        Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
     __slots__ = ("_session", "url", "params")
@@ -63,6 +66,7 @@ class ChClient:
         password: str = None,
         database: str = "default",
         compress_response: bool = False,
+        **settings,
     ):
         self._session = session
         self.url = url
@@ -75,6 +79,7 @@ class ChClient:
             self.params["database"] = database
         if compress_response:
             self.params["enable_http_compression"] = 1
+        self.params.update(settings)
 
     @classmethod
     def query_type(cls, query: str) -> QueryTypes:
