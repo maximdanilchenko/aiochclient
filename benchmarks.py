@@ -16,8 +16,8 @@ on the part which makes serialize and deserialize part of work
 = With Cython ext ===========================================
 - Avg time for selecting 10000 rows from 100 runs: 0.04855584144592285 sec. Total: 4.855584144592285
   Speed: 205948.44414625384 rows/sec
-- Avg time for selecting 10000 rows from 100 runs: 0.5195666408538818 sec (with decoding). Total: 51.956664085388184
-  Speed: 19246.809193841815 rows/sec
+- Avg time for selecting 10000 rows from 100 runs: 0.39328234910964965 sec (with decoding). Total: 39.328234910964966
+  Speed: 25427 rows/sec
 - Avg time for inserting 10000 rows from 100 runs: 0.14293188810348512 sec. Total: 14.29318881034851
   Speed: 69963.39398217303 rows/sec
 """

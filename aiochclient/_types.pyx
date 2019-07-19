@@ -1,8 +1,10 @@
+#cython: language_level=3
 import re
 from uuid import UUID
 
 from cpython cimport datetime as dt
-from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString
+from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString, PyList_Append
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
 
@@ -11,73 +13,80 @@ from aiochclient.exceptions import ChClientError
 __all__ = ["what_py_converter", "rows2ch"]
 
 
-cdef:
-    dict ESC_CHR_MAPPING = {
-        b"b": b"\b",
-        b"N": b"\N",  # NULL
-        b"f": b"\f",
-        b"r": b"\r",
-        b"n": b"\n",
-        b"t": b"\t",
-        b"0": b" ",
-        b"'": b"'",
-        b"\\": b"\\",
-    }
 DEF DQ = "'"
 DEF CM = ","
-DEF SL = b"\\"
 
 
-cdef str decode(bytes val):
+cdef str decode(char* val):
     """
     Converting bytes from clickhouse with
     backslash-escaped special characters
     to pythonic string format
     """
     cdef:
-        int n = val.find(SL)
-        bytes d, b
-    if n < 0:
-        return val.decode()
-    n += 1
-    d = val[:n]
-    b = val[n:]
-    while b:
-        d = d[:-1] + ESC_CHR_MAPPING.get(b[0:1], b[0:1])
-        b = b[1:]
-        n = b.find(SL)
-        if n < 0:
-            d = d + b
-            break
-        n += 1
-        d += b[:n]
-        b = b[n:]
-    return d.decode()
+        int current_chr
+        str result
+        Py_ssize_t i, current_i = 0, length = len(val)
+        char* c_value_buffer = <char *> PyMem_Malloc(length * sizeof(char))
+        bint escape = False
+
+    for i in range(length):
+        current_chr = val[i]
+        if escape:
+            # cython efficiently replaces it with switch/case
+            if current_chr == ord("b"):
+                c_value_buffer[current_i] = ord("\b")
+            elif current_chr == ord("N"):
+                c_value_buffer[current_i] = ord("\\")
+                current_i += 1
+                c_value_buffer[current_i] = ord("N")
+            elif current_chr == ord("f"):
+                c_value_buffer[current_i] = ord("\f")
+            elif current_chr == ord("r"):
+                c_value_buffer[current_i] = ord("\r")
+            elif current_chr == ord("n"):
+                c_value_buffer[current_i] = ord("\n")
+            elif current_chr == ord("t"):
+                c_value_buffer[current_i] = ord("\t")
+            elif current_chr == ord("0"):
+                c_value_buffer[current_i] = ord(" ")
+            elif current_chr == ord("'"):
+                c_value_buffer[current_i] = ord("'")
+            elif current_chr == ord("\\"):
+                c_value_buffer[current_i] = ord("\\")
+            else:
+                c_value_buffer[current_i] = current_chr
+            escape = False
+            current_i += 1
+        elif current_chr == ord("\\"):
+            escape = True
+        else:
+            c_value_buffer[current_i] = current_chr
+            current_i += 1
+    result = c_value_buffer[:current_i].decode()
+    PyMem_Free(c_value_buffer)
+    return result
 
 
 cdef list seq_parser(str raw):
     """
-    Generator for parsing tuples and arrays.
-    Returns elements one by one
+    Function for parsing tuples and arrays
     """
     cdef:
         list res = [], cur = []
-        str sym
-        int i, length = len(raw)
         bint blocked = False
-    if length == 0:
+    if not raw:
         return res
-    for i in range(length):
-        sym = raw[i]
+    for sym in raw:
         if sym == CM and not blocked:
-            res.append(PyUnicode_Join("", cur))
+            PyList_Append(res, PyUnicode_Join("", cur))
             del cur[:]
         elif sym == DQ:
             blocked = not blocked
-            cur.append(sym)
+            PyList_Append(cur, sym)
         else:
-            cur.append(sym)
-    res.append(PyUnicode_Join("", cur))
+            PyList_Append(cur, sym)
+    PyList_Append(res, PyUnicode_Join("", cur))
     return res
 
 
