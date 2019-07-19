@@ -2,7 +2,6 @@ import re
 from uuid import UUID
 
 from cpython cimport datetime as dt
-from cpython cimport bool
 from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
@@ -65,7 +64,7 @@ cdef list seq_parser(str raw):
         list res = [], cur = []
         str sym
         int i, length = len(raw)
-        bool blocked = False
+        bint blocked = False
     if length == 0:
         return res
     for i in range(length):
@@ -86,9 +85,9 @@ cdef class StrType:
     
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -108,9 +107,9 @@ cdef class Int8Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -125,9 +124,9 @@ cdef class Int16Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -142,9 +141,9 @@ cdef class Int32Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -159,9 +158,9 @@ cdef class Int64Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -176,9 +175,9 @@ cdef class UInt8Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -193,9 +192,9 @@ cdef class UInt16Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -210,9 +209,9 @@ cdef class UInt32Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -227,9 +226,9 @@ cdef class UInt64Type:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -244,9 +243,9 @@ cdef class FloatType:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -261,9 +260,9 @@ cdef class DateType:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -288,9 +287,9 @@ cdef class DateTimeType:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -315,10 +314,10 @@ cdef class TupleType:
 
     cdef:
         str name
-        bool container
+        bint container
         tuple types
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
         cdef str tps = re.findall(r"^Tuple\((.*)\)$", name)[0]
@@ -341,10 +340,10 @@ cdef class ArrayType:
 
     cdef:
         str name
-        bool container
+        bint container
         type
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
         self.type = what_py_type(
@@ -365,10 +364,10 @@ cdef class NullableType:
 
     cdef:
         str name
-        bool container
+        bint container
         type
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
         self.type = what_py_type(re.findall(r"^Nullable\((.*)\)$", name)[0])
@@ -389,9 +388,9 @@ cdef class NothingType:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -406,9 +405,9 @@ cdef class UUIDType:
 
     cdef:
         str name
-        bool container
+        bint container
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
 
@@ -426,10 +425,10 @@ cdef class LowCardinalityType:
 
     cdef:
         str name
-        bool container
+        bint container
         type
 
-    def __cinit__(self, str name, bool container):
+    def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
         self.type = what_py_type(re.findall(r"^LowCardinality\((.*)\)$", name)[0])
@@ -470,7 +469,7 @@ cdef dict CH_TYPES_MAPPING = {
 }
 
 
-cdef what_py_type(str name, bool container = False):
+cdef what_py_type(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
@@ -479,7 +478,7 @@ cdef what_py_type(str name, bool container = False):
         raise ChClientError(f"Unrecognized type name: '{name}'")
 
 
-cpdef what_py_converter(str name, bool container = False):
+cpdef what_py_converter(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     return what_py_type(name, container).convert
 
