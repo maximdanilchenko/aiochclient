@@ -8,4 +8,4 @@ sphinx
 sphinx_issues
 sphinx_rtd_theme
 black
-isort
+isort==4.3.21
