@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
+import ciso8601
+
 from aiochclient.exceptions import ChClientError
 
 __all__ = ["what_py_converter", "rows2ch"]
@@ -131,7 +133,7 @@ class DateType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return dt.datetime.strptime(string, "%Y-%m-%d").date()
+            return ciso8601.parse_datetime(string).date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":
@@ -150,7 +152,7 @@ class DateTimeType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
+            return ciso8601.parse_datetime(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":

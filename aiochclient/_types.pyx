@@ -1,12 +1,13 @@
 #cython: language_level=3
 import re
 from uuid import UUID
-
-from cpython cimport datetime as dt
+from cpython.datetime cimport date, datetime
 from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString, PyList_Append
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
+
+import ciso8601
 
 from aiochclient.exceptions import ChClientError
 
@@ -283,7 +284,7 @@ cdef class DateType:
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return dt.datetime.strptime(string, "%Y-%m-%d").date()
+            return ciso8601.parse_datetime(string).date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":
@@ -310,7 +311,7 @@ cdef class DateTimeType:
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return dt.datetime.strptime(string, "%Y-%m-%d %H:%M:%S")
+            return ciso8601.parse_datetime(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":
@@ -552,8 +553,8 @@ cdef dict PY_TYPES_MAPPING = {
     int: unconvert_int,
     float: unconvert_float,
     str: unconvert_str,
-    dt.date: unconvert_date,
-    dt.datetime: unconvert_datetime,
+    date: unconvert_date,
+    datetime: unconvert_datetime,
     tuple: unconvert_tuple,
     list: unconvert_array,
     type(None): unconvert_nullable,
