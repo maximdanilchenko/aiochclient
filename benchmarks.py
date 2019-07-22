@@ -44,10 +44,10 @@ import time
 import uuid
 
 import uvloop
+from aioch import Client
 from aiohttp import ClientSession
 
 from aiochclient import ChClient
-from aioch import Client
 
 
 def row_data():
