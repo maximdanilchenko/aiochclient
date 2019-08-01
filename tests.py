@@ -142,7 +142,6 @@ async def all_types_db(chclient, rows):
                             low_cardinality_int LowCardinality(Int32),
                             low_cardinality_date LowCardinality(Date),
                             low_cardinality_datetime LowCardinality(DateTime)
-                            
                             ) ENGINE = Memory
     """
     )

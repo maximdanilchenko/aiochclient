@@ -7,9 +7,17 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
 
-import ciso8601
-
 from aiochclient.exceptions import ChClientError
+
+try:
+    import ciso8601
+
+    datetime_parse = ciso8601.parse_datetime
+except ImportError:
+    from datetime import datetime
+
+    datetime_parse = datetime.fromisoformat
+
 
 __all__ = ["what_py_converter", "rows2ch"]
 
@@ -284,7 +292,7 @@ cdef class DateType:
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return ciso8601.parse_datetime(string).date()
+            return datetime_parse(string).date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":
@@ -311,7 +319,7 @@ cdef class DateTimeType:
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return ciso8601.parse_datetime(string)
+            return datetime_parse(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":

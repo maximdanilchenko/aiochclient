@@ -48,7 +48,7 @@ def read(fname):
 
 setup_opts = dict(
     name='aiochclient',
-    version='1.0.2',
+    version='1.1.0',
     description='Async http clickhouse client for python 3.6+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
@@ -57,7 +57,7 @@ setup_opts = dict(
     packages=find_packages(exclude=('test*',)),
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
-    install_requires=read('requirements.txt').split(),
+    install_requires=['aiohttp>=3.0.1'],
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
@@ -72,6 +72,7 @@ setup_opts = dict(
     ],
     test_suite='tests',
     ext_modules=extensions,
+    extras_require={'speedups': ['aihttp[speedups]>=3.0.1', 'ciso8601>=2.1.1']},
     cmdclass=dict(build_ext=ve_build_ext),
 )
 
