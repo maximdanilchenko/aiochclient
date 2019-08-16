@@ -48,7 +48,7 @@ def read(fname):
 
 setup_opts = dict(
     name='aiochclient',
-    version='1.1.0',
+    version='1.1.3',
     description='Async http clickhouse client for python 3.6+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
@@ -72,7 +72,7 @@ setup_opts = dict(
     ],
     test_suite='tests',
     ext_modules=extensions,
-    extras_require={'speedups': ['aihttp[speedups]>=3.0.1', 'ciso8601>=2.1.1']},
+    extras_require={'speedups': ['aiodns', 'cchardet', 'ciso8601>=2.1.1']},
     cmdclass=dict(build_ext=ve_build_ext),
 )
 
