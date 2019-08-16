@@ -1,5 +1,5 @@
 # aiochclient
-### Async http(s) clickhouse client for python 3.6+ with types converting in both directions, streaming support, lazy decoding on select queries and fully typed interface
+### Async http(s) ClickHouse client for python 3.6+ with types converting in both directions, streaming support, lazy decoding on select queries and fully typed interface
 
 [![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
 [![Travis CI](https://travis-ci.org/maximdanilchenko/aiochclient.svg?branch=master)](https://travis-ci.org/maximdanilchenko/aiochclient)
@@ -19,12 +19,20 @@
 ```
 > pip install aiochclient
 ```
+Or to install with extras requirements for speedup:
+```
+> pip install aiochclient[speedups]
+```
+It will additionally install [cChardet](https://pypi.python.org/pypi/cchardet) 
+and [aiodns](https://pypi.python.org/pypi/aiodns) for `aiohttp` speedup 
+and [ciso8601](https://github.com/closeio/ciso8601) for ultra fast 
+datetime parsing while decoding data from ClickHouse.
 
-While installing it will try to build C extensions speed boost (about 30% speed up).
+Also while installing it will try to build Cython extensions for speed boost (about 30%).
 
 ## Quick start
 
-### Connecting to Clickhouse
+### Connecting to ClickHouse
 
 `aiochclient` needs `aiohttp.ClientSession` for connecting:
 
@@ -102,9 +110,9 @@ assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 ## Types converting
 
 `aiochclient` automatically converts values to needed type both 
-from Clickhouse response and for client INSERT queries.
+from ClickHouse response and for client INSERT queries.
 
-| Clickhouse type | Python type |
+| ClickHouse type | Python type |
 |:----------------|:------------|
 | `UInt8` | `int` |
 | `UInt16` | `int` |
@@ -137,16 +145,16 @@ Note that by default pool limit is 100 connections.
 
 ## Speed
 
-Using of `uvloop`, `cChardet` and `aiodns` 
-libraries are recommended for sake of speed. 
+Using of `uvloop` and installing with `aiochclient[speedups]`
+is highly recommended for sake of speed. 
 
 As for the last version of `aiochclient` its speed 
 using one task (without gather or parallel 
 clients and so on) is about 
 **180k-220k rows/sec** on SELECT and about 
 **50k-80k rows/sec** on INSERT queries 
-depending on its environment and clickhouse settings.
+depending on its environment and ClickHouse settings.
 
 ------
 
-Please ⭐️ this repository if this project helped you!
+Please star️ this repository if this project helped you!
