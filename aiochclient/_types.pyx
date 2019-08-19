@@ -9,14 +9,21 @@ from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
 
 from aiochclient.exceptions import ChClientError
 
+
+cdef datetime _datetime_parse(str string):
+    return datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
+
+cdef date _date_parse(str string):
+    return datetime.strptime(string, '%Y-%m-%d')
+
+
 try:
     import ciso8601
-
-    datetime_parse = ciso8601.parse_datetime
 except ImportError:
-    from datetime import datetime
-
-    datetime_parse = datetime.fromisoformat
+    datetime_parse = _datetime_parse
+    date_parse = _date_parse
+else:
+    datetime_parse = date_parse = ciso8601.parse_datetime
 
 
 __all__ = ["what_py_converter", "rows2ch"]
@@ -292,7 +299,7 @@ cdef class DateType:
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return datetime_parse(string).date()
+            return date_parse(string).date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":

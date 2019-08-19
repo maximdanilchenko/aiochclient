@@ -10,10 +10,12 @@ matrix:
   allow_failures:
     - python: nightly
 env:
-  - WITH_CYTHON=dev-requirements.txt
-  - WITH_CYTHON=dev-requirements-cython.txt
+  - REQUIREMENTS=dev-requirements/dev-requirements.txt
+  - REQUIREMENTS=dev-requirements/dev-requirements-cython.txt
+  - REQUIREMENTS=dev-requirements/dev-requirements-ciso.txt
+  - REQUIREMENTS=dev-requirements/dev-requirements-cython-ciso.txt
 install:
-  - pip install -r $WITH_CYTHON
+  - pip install -r $REQUIREMENTS
   - pip install -e .
 script:
   - make check_format

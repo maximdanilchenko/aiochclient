@@ -9,9 +9,14 @@ from aiochclient.exceptions import ChClientError
 try:
     import ciso8601
 
-    datetime_parse = ciso8601.parse_datetime
+    datetime_parse = date_parse = ciso8601.parse_datetime
 except ImportError:
-    datetime_parse = dt.datetime.fromisoformat
+
+    def datetime_parse(string):
+        return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
+
+    def date_parse(string):
+        return dt.datetime.strptime(string, '%Y-%m-%d')
 
 
 __all__ = ["what_py_converter", "rows2ch"]
@@ -139,7 +144,7 @@ class DateType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return datetime_parse(string).date()
+            return date_parse(string).date()
         except ValueError:
             # In case of 0000-00-00
             if string == "0000-00-00":

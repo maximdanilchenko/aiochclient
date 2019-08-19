@@ -1,5 +1,4 @@
 aiohttp>=3.0.1
-ciso8601>=2.1.1
 pytest
 pytest-cov
 pytest-sugar
@@ -10,3 +9,4 @@ sphinx_issues
 sphinx_rtd_theme
 black
 isort==4.3.21
+ciso8601>=2.1.1

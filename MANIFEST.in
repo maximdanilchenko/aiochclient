@@ -12,3 +12,4 @@ global-exclude *.dll
 global-exclude *.a
 global-exclude *.obj
 prune docs/_build
+prune dev-requirements
