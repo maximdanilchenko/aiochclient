@@ -130,6 +130,10 @@ from ClickHouse response and for client INSERT queries.
 | `Enum16` | `str` |
 | `Date` | `datetime.date` |
 | `DateTime` | `datetime.datetime` |
+| `Decimal` | `decimal.Decimal` |
+| `Decimal32` | `decimal.Decimal` |
+| `Decimal64` | `decimal.Decimal` |
+| `Decimal128` | `decimal.Decimal` |
 | `Tuple(T1, T2, ...)` | `Tuple[T1, T2, ...]` |
 | `Array(T)` | `List[T]` |
 | `UUID` | `uuid.UUID` |
