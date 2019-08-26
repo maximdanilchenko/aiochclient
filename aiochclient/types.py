@@ -1,6 +1,7 @@
 import datetime as dt
 import re
 from abc import ABC, abstractmethod
+from decimal import Decimal
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
@@ -265,6 +266,17 @@ class LowCardinalityType(BaseType):
         return self.type.p_type(string)
 
 
+class DecimalType(BaseType):
+    p_type = Decimal
+
+    def convert(self, value: bytes) -> Decimal:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value: Decimal) -> bytes:
+        return str(value).encode()
+
+
 CH_TYPES_MAPPING = {
     "UInt8": IntType,
     "UInt16": IntType,
@@ -288,6 +300,10 @@ CH_TYPES_MAPPING = {
     "Nothing": NothingType,
     "UUID": UUIDType,
     "LowCardinality": LowCardinalityType,
+    "Decimal": DecimalType,
+    "Decimal32": DecimalType,
+    "Decimal64": DecimalType,
+    "Decimal128": DecimalType,
 }
 
 PY_TYPES_MAPPING = {
@@ -300,6 +316,7 @@ PY_TYPES_MAPPING = {
     list: ArrayType.unconvert,
     type(None): NullableType.unconvert,
     UUID: UUIDType.unconvert,
+    Decimal: DecimalType.unconvert,
 }
 
 

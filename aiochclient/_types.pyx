@@ -1,6 +1,8 @@
 #cython: language_level=3
 import re
+from decimal import Decimal
 from uuid import UUID
+
 from cpython.datetime cimport date, datetime
 from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString, PyList_Append
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
@@ -473,6 +475,23 @@ cdef class LowCardinalityType:
         return self._convert(decode(value))
 
 
+cdef class DecimalType:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef object p_type(self, str string):
+        return Decimal(string)
+
+    cpdef object convert(self, bytes value):
+        return Decimal(value.decode())
+
+
 cdef dict CH_TYPES_MAPPING = {
     "UInt8": UInt8Type,
     "UInt16": UInt16Type,
@@ -496,6 +515,10 @@ cdef dict CH_TYPES_MAPPING = {
     "Nothing": NothingType,
     "UUID": UUIDType,
     "LowCardinality": LowCardinalityType,
+    "Decimal": DecimalType,
+    "Decimal32": DecimalType,
+    "Decimal64": DecimalType,
+    "Decimal128": DecimalType,
 }
 
 
@@ -525,7 +548,6 @@ cdef bytes unconvert_str(str value):
         else:
             res.append(value[i])
     res.append("'")
-    # return ''.join(res).encode()
     return PyUnicode_AsEncodedString(PyUnicode_Join("", res), NULL, NULL)
 
 
@@ -534,18 +556,15 @@ cdef bytes unconvert_int(object value):
 
 
 cdef bytes unconvert_float(double value):
-    # return f"{value}".encode()
-    return PyUnicode_AsEncodedString(str(value), NULL, NULL)
+    return f"{value}".encode('latin-1')
 
 
 cdef bytes unconvert_date(object value):
-    # return f"'{value}'".encode()
-    return PyUnicode_AsEncodedString(f"'{value}'", NULL, NULL)
+    return f"'{value}'".encode('latin-1')
 
 
 cdef bytes unconvert_datetime(object value):
-    # return f"'{value.replace(microsecond=0)}'".encode()
-    return PyUnicode_AsEncodedString(f"'{value.replace(microsecond=0)}'", NULL, NULL)
+    return f"'{value.replace(microsecond=0)}'".encode('latin-1')
 
 
 cdef bytes unconvert_tuple(tuple value):
@@ -561,7 +580,11 @@ cdef bytes unconvert_nullable(object value):
 
 
 cdef bytes unconvert_uuid(object value):
-    return f"'{value}'".encode()
+    return f"'{value}'".encode('latin-1')
+
+
+cdef bytes unconvert_decimal(object value):
+    return f'{value}'.encode('latin-1')
 
 
 cdef dict PY_TYPES_MAPPING = {
@@ -574,6 +597,7 @@ cdef dict PY_TYPES_MAPPING = {
     list: unconvert_array,
     type(None): unconvert_nullable,
     UUID: unconvert_uuid,
+    Decimal: unconvert_decimal,
 }
 
 

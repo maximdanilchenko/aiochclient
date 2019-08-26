@@ -1,4 +1,5 @@
 import datetime as dt
+from decimal import Decimal
 from uuid import uuid4
 
 import aiohttp
@@ -52,6 +53,10 @@ def rows(uuid):
             777,
             dt.date(1994, 9, 7),
             dt.datetime(2018, 9, 21, 10, 32, 23),
+            Decimal('1234.5678'),
+            Decimal('1234.56'),
+            Decimal('1234.56'),
+            Decimal('123.56'),
         ),
         (
             2,
@@ -85,6 +90,10 @@ def rows(uuid):
             777,
             dt.date(1994, 9, 7),
             dt.datetime(2018, 9, 21, 10, 32, 23),
+            Decimal('1234.5678'),
+            Decimal('1234.56'),
+            Decimal('1234.56'),
+            Decimal('123.56'),
         ),
     ]
 
@@ -141,7 +150,11 @@ async def all_types_db(chclient, rows):
                             low_cardinality_nullable_str LowCardinality(Nullable(String)),
                             low_cardinality_int LowCardinality(Int32),
                             low_cardinality_date LowCardinality(Date),
-                            low_cardinality_datetime LowCardinality(DateTime)
+                            low_cardinality_datetime LowCardinality(DateTime),
+                            decimal32 Decimal32(4),
+                            decimal64 Decimal64(2),
+                            decimal128 Decimal128(6),
+                            decimal Decimal(6, 3)
                             ) ENGINE = Memory
     """
     )
@@ -389,6 +402,18 @@ class TestTypes:
         assert await self.select_field("low_cardinality_datetime") == dt.datetime(
             2018, 9, 21, 10, 32, 23
         )
+
+    async def test_decimal(self):
+        assert await self.select_field("decimal") == Decimal('123.56')
+
+    async def test_decimal32(self):
+        assert await self.select_field("decimal32") == Decimal('1234.5678')
+
+    async def test_decimal64(self):
+        assert await self.select_field("decimal64") == Decimal('1234.56')
+
+    async def test_decimal128(self):
+        assert await self.select_field("decimal128") == Decimal('1234.56')
 
 
 @pytest.mark.fetching
