@@ -41,7 +41,7 @@ class ve_build_ext(build_ext):
 
 
 def read(fname):
-    with open(fname) as fp:
+    with open(fname, encoding="utf8") as fp:
         content = fp.read()
     return content
 
