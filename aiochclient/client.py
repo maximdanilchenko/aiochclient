@@ -13,6 +13,7 @@ try:
 except ImportError:
     from aiochclient.types import rows2ch
 
+from aiochclient.types import json2ch
 
 class QueryTypes(Enum):
     FETCH = 0
@@ -124,7 +125,11 @@ class ChClient:
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
-            data = rows2ch(*args)
+            tokens = query.strip().split(" ")
+            if len(tokens) > 4 and tokens[4].startswith("JSON"):
+                data = json2ch(*args)
+            else:
+                data = rows2ch(*args)
         else:
             params = self.params
             data = query.encode()
