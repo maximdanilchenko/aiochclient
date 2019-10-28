@@ -125,8 +125,7 @@ class ChClient:
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
-            tokens = query.strip().split(" ")
-            if len(tokens) > 4 and tokens[4].startswith("JSON"):
+            if 'FORMAT JSONEachRow' in query:
                 data = json2ch(*args)
             else:
                 data = rows2ch(*args)
