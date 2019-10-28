@@ -496,7 +496,9 @@ class TestRecord:
         assert record.get(0) == 2
 
     async def test_bool(self):
-        records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
+        records = await self.ch.fetch(
+            "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
+        )
         assert bool(records[-2]) is False
 
     async def test_len(self):
@@ -507,7 +509,9 @@ class TestRecord:
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         with pytest.raises(IndexError):
             record[42]
-        records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
+        records = await self.ch.fetch(
+            "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
+        )
         with pytest.raises(IndexError):
             records[-2][0]
 
@@ -515,6 +519,25 @@ class TestRecord:
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         with pytest.raises(KeyError):
             record["no_such_key"]
-        records = await self.ch.fetch("SELECT * FROM all_types WITH TOTALS")
+        records = await self.ch.fetch(
+            "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
+        )
         with pytest.raises(KeyError):
             records[-2]["a"]
+
+
+@pytest.mark.usefixtures("class_chclient")
+class TestJsonInsert:
+    async def test_json_insert(self):
+        sql = "INSERT INTO all_types FORMAT JSONEachRow"
+        records = [
+            {"decimal32": 32},
+            {"fixed_string": "simple string", "low_cardinality_str": "meow test"},
+        ]
+        await self.ch.execute(sql, *records)
+        result = await self.ch.fetch("SELECT * FROM all_types WHERE decimal32 = 32")
+        assert len(result) == 1
+        result = await self.ch.fetch(
+            "SELECT * FROM all_types WHERE low_cardinality_str = 'meow test'"
+        )
+        assert len(result) == 1

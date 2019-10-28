@@ -2,9 +2,9 @@ import datetime as dt
 import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
+from json import dumps
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
-from json import dumps
 
 from aiochclient.exceptions import ChClientError
 
@@ -350,5 +350,6 @@ def py2ch(value):
 def rows2ch(*rows):
     return b",".join(TupleType.unconvert(row) for row in rows)
 
+
 def json2ch(*records):
-    return ",".join(dumps(row) for row in records)
+    return dumps(records)[1:-1]

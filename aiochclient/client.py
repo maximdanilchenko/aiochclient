@@ -6,6 +6,7 @@ from aiohttp import client
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.records import Record, RecordsFabric
+from aiochclient.types import json2ch
 
 # Optional cython extension:
 try:
@@ -13,7 +14,6 @@ try:
 except ImportError:
     from aiochclient.types import rows2ch
 
-from aiochclient.types import json2ch
 
 class QueryTypes(Enum):
     FETCH = 0
