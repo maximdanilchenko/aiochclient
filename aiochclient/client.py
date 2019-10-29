@@ -6,6 +6,7 @@ from aiohttp import client
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.records import Record, RecordsFabric
+from aiochclient.types import json2ch
 
 # Optional cython extension:
 try:
@@ -124,7 +125,10 @@ class ChClient:
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
-            data = rows2ch(*args)
+            if 'FORMAT JSONEachRow' in query:
+                data = json2ch(*args)
+            else:
+                data = rows2ch(*args)
         else:
             params = self.params
             data = query.encode()
