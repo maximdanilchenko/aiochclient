@@ -125,6 +125,8 @@ class ChClient:
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
+            # TODO: refactor this part, because its not
+            #  really correct way to ensure it is JSON format
             if 'FORMAT JSONEachRow' in query:
                 data = json2ch(*args)
             else:
