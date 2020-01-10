@@ -53,42 +53,45 @@ cdef str decode(char* val):
         char* c_value_buffer = <char *> PyMem_Malloc(length * sizeof(char))
         bint escape = False
 
-    for i in range(length):
-        current_chr = val[i]
-        if escape:
-            # cython efficiently replaces it with switch/case
-            if current_chr == ord("b"):
-                c_value_buffer[current_i] = ord("\b")
-            elif current_chr == ord("N"):
-                c_value_buffer[current_i] = ord("\\")
+    try:
+        for i in range(length):
+            current_chr = val[i]
+            if escape:
+                # cython efficiently replaces it with switch/case
+                if current_chr == ord("b"):
+                    c_value_buffer[current_i] = ord("\b")
+                elif current_chr == ord("N"):
+                    c_value_buffer[current_i] = ord("\\")
+                    current_i += 1
+                    c_value_buffer[current_i] = ord("N")
+                elif current_chr == ord("f"):
+                    c_value_buffer[current_i] = ord("\f")
+                elif current_chr == ord("r"):
+                    c_value_buffer[current_i] = ord("\r")
+                elif current_chr == ord("n"):
+                    c_value_buffer[current_i] = ord("\n")
+                elif current_chr == ord("t"):
+                    c_value_buffer[current_i] = ord("\t")
+                elif current_chr == ord("0"):
+                    c_value_buffer[current_i] = ord(" ")
+                elif current_chr == ord("'"):
+                    c_value_buffer[current_i] = ord("'")
+                elif current_chr == ord("\\"):
+                    c_value_buffer[current_i] = ord("\\")
+                else:
+                    c_value_buffer[current_i] = current_chr
+                escape = False
                 current_i += 1
-                c_value_buffer[current_i] = ord("N")
-            elif current_chr == ord("f"):
-                c_value_buffer[current_i] = ord("\f")
-            elif current_chr == ord("r"):
-                c_value_buffer[current_i] = ord("\r")
-            elif current_chr == ord("n"):
-                c_value_buffer[current_i] = ord("\n")
-            elif current_chr == ord("t"):
-                c_value_buffer[current_i] = ord("\t")
-            elif current_chr == ord("0"):
-                c_value_buffer[current_i] = ord(" ")
-            elif current_chr == ord("'"):
-                c_value_buffer[current_i] = ord("'")
             elif current_chr == ord("\\"):
-                c_value_buffer[current_i] = ord("\\")
+                escape = True
             else:
                 c_value_buffer[current_i] = current_chr
-            escape = False
-            current_i += 1
-        elif current_chr == ord("\\"):
-            escape = True
-        else:
-            c_value_buffer[current_i] = current_chr
-            current_i += 1
-    result = c_value_buffer[:current_i].decode()
-    PyMem_Free(c_value_buffer)
-    return result
+                current_i += 1
+        result = c_value_buffer[:current_i].decode()
+        return result
+    finally:
+        PyMem_Free(c_value_buffer)
+
 
 
 cdef list seq_parser(str raw):
