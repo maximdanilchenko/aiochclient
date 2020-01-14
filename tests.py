@@ -527,17 +527,27 @@ class TestRecord:
 
 
 @pytest.mark.usefixtures("class_chclient")
-class TestJsonInsert:
-    async def test_json_insert(self):
+class TestJson:
+    async def test_json_insert_select(self):
         sql = "INSERT INTO all_types FORMAT JSONEachRow"
         records = [
             {"decimal32": 32},
             {"fixed_string": "simple string", "low_cardinality_str": "meow test"},
         ]
         await self.ch.execute(sql, *records)
-        result = await self.ch.fetch("SELECT * FROM all_types WHERE decimal32 = 32")
-        assert len(result) == 1
         result = await self.ch.fetch(
-            "SELECT * FROM all_types WHERE low_cardinality_str = 'meow test'"
+            "SELECT * FROM all_types WHERE decimal32 = 32 FORMAT JSONEachRow"
         )
         assert len(result) == 1
+        result = await self.ch.fetch(
+            "SELECT fixed_string, low_cardinality_str FROM all_types "
+            "WHERE low_cardinality_str = 'meow test'",
+            json=True,
+        )
+        assert result == [
+            {
+                "fixed_string": "simple string\x00\x00\x00\x00\x00\x00\x00\x00"
+                "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+                "low_cardinality_str": "meow test",
+            }
+        ]

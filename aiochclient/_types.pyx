@@ -617,3 +617,7 @@ cdef bytes py2ch(value):
 
 def rows2ch(*rows):
     return b",".join(unconvert_tuple(tuple(row)) for row in rows)
+
+
+def json2ch(*records, dumps):
+    return dumps(records)[1:-1]

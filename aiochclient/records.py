@@ -7,7 +7,7 @@ try:
 except ImportError:
     from aiochclient.types import what_py_converter
 
-__all__ = ["RecordsFabric", "Record"]
+__all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
 
 
 class Record(Mapping):
@@ -95,3 +95,11 @@ class RecordsFabric:
             names=self.names,
             converters=self.converters,
         )
+
+
+class FromJsonFabric:
+    def __init__(self, loads):
+        self.loads = loads
+
+    def new(self, row: bytes) -> Any:
+        return self.loads(row)

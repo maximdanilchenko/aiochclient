@@ -2,7 +2,6 @@ import datetime as dt
 import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from json import dumps
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
@@ -351,5 +350,5 @@ def rows2ch(*rows):
     return b",".join(TupleType.unconvert(row) for row in rows)
 
 
-def json2ch(*records):
+def json2ch(*records, dumps: Callable[[Any], bytes]):
     return dumps(records)[1:-1]

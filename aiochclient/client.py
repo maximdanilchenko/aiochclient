@@ -1,3 +1,4 @@
+import json as json_
 import warnings
 from enum import Enum
 from typing import Any, AsyncGenerator, List, Optional
@@ -5,14 +6,14 @@ from typing import Any, AsyncGenerator, List, Optional
 from aiohttp import client
 
 from aiochclient.exceptions import ChClientError
-from aiochclient.records import Record, RecordsFabric
-from aiochclient.types import json2ch
+from aiochclient.records import FromJsonFabric, Record, RecordsFabric
+from aiochclient.sql import sqlparse
 
 # Optional cython extension:
 try:
-    from aiochclient._types import rows2ch
+    from aiochclient._types import rows2ch, json2ch
 except ImportError:
-    from aiochclient.types import rows2ch
+    from aiochclient.types import rows2ch, json2ch
 
 
 class QueryTypes(Enum):
@@ -56,7 +57,7 @@ class ChClient:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
-    __slots__ = ("_session", "url", "params")
+    __slots__ = ("_session", "url", "params", "_json")
 
     def __init__(
         self,
@@ -67,6 +68,7 @@ class ChClient:
         password: str = None,
         database: str = "default",
         compress_response: bool = False,
+        json=json_,  # type: ignore
         **settings,
     ):
         self._session = session
@@ -80,23 +82,8 @@ class ChClient:
             self.params["database"] = database
         if compress_response:
             self.params["enable_http_compression"] = 1
+        self._json = json
         self.params.update(settings)
-
-    @classmethod
-    def query_type(cls, query: str) -> QueryTypes:
-        check = query.lstrip()[:8].upper()
-        if any(
-            [
-                check.startswith("SELECT"),
-                check.startswith("SHOW"),
-                check.startswith("DESCRIBE"),
-                check.startswith("EXISTS"),
-            ]
-        ):
-            return QueryTypes.FETCH
-        if check.startswith("INSERT"):
-            return QueryTypes.INSERT
-        return QueryTypes.OTHER
 
     async def is_alive(self) -> bool:
         """Checks if connection is Ok.
@@ -114,21 +101,27 @@ class ChClient:
         ) as resp:  # type: client.ClientResponse
             return resp.status == 200
 
-    async def _execute(self, query: str, *args) -> AsyncGenerator[Record, None]:
-        query_type = self.query_type(query)
+    async def _execute(
+        self, query: str, *args, json: bool = False
+    ) -> AsyncGenerator[Record, None]:
+        need_fetch, is_json, statement_type = self._parse_squery(query)
 
-        if query_type == QueryTypes.FETCH:
+        if not is_json and json:
+            query += " FORMAT JSONEachRow"
+            is_json = True
+
+        if not is_json and need_fetch:
             query += " FORMAT TSVWithNamesAndTypes"
+
         if args:
-            if query_type != QueryTypes.INSERT:
+            if statement_type != 'INSERT':
                 raise ChClientError(
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
-            # TODO: refactor this part, because its not
-            #  really correct way to ensure it is JSON format
-            if 'FORMAT JSONEachRow' in query:
-                data = json2ch(*args)
+
+            if is_json:
+                data = json2ch(*args, dumps=self._json.dumps)
             else:
                 data = rows2ch(*args)
         else:
@@ -140,19 +133,25 @@ class ChClient:
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode(errors='replace'))
-            if query_type == QueryTypes.FETCH:
-                rf = RecordsFabric(
-                    names=await resp.content.readline(),
-                    tps=await resp.content.readline(),
-                )
-                async for line in resp.content:
-                    yield rf.new(line)
+            if need_fetch:
+                if is_json:
+                    rf = FromJsonFabric(loads=self._json.loads)
+                    async for line in resp.content:
+                        yield rf.new(line)
+                else:
+                    rf = RecordsFabric(
+                        names=await resp.content.readline(),
+                        tps=await resp.content.readline(),
+                    )
+                    async for line in resp.content:
+                        yield rf.new(line)
 
-    async def execute(self, query: str, *args) -> None:
+    async def execute(self, query: str, *args, json: bool = False) -> None:
         """Execute query. Returns None.
 
         :param query: Clickhouse query string.
         :param args: Arguments for insert queries.
+        :param bool json: Execute query in JSONEachRow mode.
 
         Usage:
 
@@ -169,13 +168,14 @@ class ChClient:
 
         :return: Nothing.
         """
-        async for _ in self._execute(query, *args):
+        async for _ in self._execute(query, *args, json=json):
             return None
 
-    async def fetch(self, query: str, *args) -> List[Record]:
+    async def fetch(self, query: str, *args, json: bool = False) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
         :param query: Clickhouse query string.
+        :param bool json: Execute query in JSONEachRow mode.
 
         Usage:
 
@@ -185,12 +185,13 @@ class ChClient:
 
         :return: All rows from query.
         """
-        return [row async for row in self._execute(query, *args)]
+        return [row async for row in self._execute(query, *args, json=json)]
 
-    async def fetchrow(self, query: str, *args) -> Optional[Record]:
+    async def fetchrow(self, query: str, *args, json: bool = False) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
         :param query: Clickhouse query string.
+        :param bool json: Execute query in JSONEachRow mode.
 
         Usage:
 
@@ -202,7 +203,7 @@ class ChClient:
 
         :return: First row from query or None if there no results.
         """
-        async for row in self._execute(query, *args):
+        async for row in self._execute(query, *args, json=json):
             return row
         return None
 
@@ -214,10 +215,11 @@ class ChClient:
         )
         return await self.fetchrow(query, *args)
 
-    async def fetchval(self, query: str, *args) -> Any:
+    async def fetchval(self, query: str, *args, json: bool = False) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
         :param query: Clickhouse query string.
+        :param bool json: Execute query in JSONEachRow mode.
 
         Usage:
 
@@ -228,15 +230,18 @@ class ChClient:
 
         :return: First value of the first row or None if there no results.
         """
-        async for row in self._execute(query, *args):
+        async for row in self._execute(query, *args, json=json):
             if row:
                 return row[0]
         return None
 
-    async def iterate(self, query: str, *args) -> AsyncGenerator[Record, None]:
+    async def iterate(
+        self, query: str, *args, json: bool = False
+    ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
         :param str query: Clickhouse query string.
+        :param bool json: Execute query in JSONEachRow mode.
 
         Usage:
 
@@ -249,7 +254,7 @@ class ChClient:
 
         :return: Rows one by one.
         """
-        async for row in self._execute(query, *args):
+        async for row in self._execute(query, *args, json=json):
             yield row
 
     async def cursor(self, query: str, *args) -> AsyncGenerator[Record, None]:
@@ -260,3 +265,24 @@ class ChClient:
         )
         async for row in self.iterate(query, *args):
             yield row
+
+    @staticmethod
+    def _parse_squery(query):
+        statement = sqlparse.parse(query)[0]
+        statement_type = statement.get_type()
+        if statement_type in ('SELECT', 'SHOW', 'DESCRIBE', 'EXISTS',):
+            need_fetch = True
+        else:
+            need_fetch = False
+
+        fmt = statement.token_matching(
+            (lambda tk: tk.match(sqlparse.tokens.Keyword, 'FORMAT'),), 0
+        )
+        if fmt:
+            is_json = statement.token_matching(
+                (lambda tk: tk.match(None, ['JSONEachRow']),),
+                statement.token_index(fmt) + 1,
+            )
+        else:
+            is_json = False
+        return need_fetch, is_json, statement_type
