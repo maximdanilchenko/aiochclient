@@ -57,6 +57,7 @@ def rows(uuid):
             Decimal('1234.56'),
             Decimal('1234.56'),
             Decimal('123.56'),
+            [[1, 2, 3], [1, 2], [6, 7]],
         ),
         (
             2,
@@ -94,6 +95,7 @@ def rows(uuid):
             Decimal('1234.56'),
             Decimal('1234.56'),
             Decimal('123.56'),
+            [],
         ),
     ]
 
@@ -154,7 +156,8 @@ async def all_types_db(chclient, rows):
                             decimal32 Decimal32(4),
                             decimal64 Decimal64(2),
                             decimal128 Decimal128(6),
-                            decimal Decimal(6, 3)
+                            decimal Decimal(6, 3),
+                            array_array_int Array(Array(Int32))
                             ) ENGINE = Memory
     """
     )
@@ -415,6 +418,9 @@ class TestTypes:
     async def test_decimal128(self):
         assert await self.select_field("decimal128") == Decimal('1234.56')
 
+    async def test_array_of_arrays(self):
+        assert await self.select_field("array_array_int") == [[1, 2, 3], [1, 2], [6, 7]]
+
 
 @pytest.mark.fetching
 @pytest.mark.usefixtures("class_chclient")
@@ -514,6 +520,14 @@ class TestRecord:
         )
         with pytest.raises(IndexError):
             records[-2][0]
+
+    @pytest.mark.skip
+    async def test_empty_string(self):
+        await self.ch.execute("INSERT INTO all_types (uint8, string) VALUES", (6, ''))
+        result = await self.ch.fetch("SELECT string FROM all_types WHERE uint8=6")
+        assert len(result) == 1
+        record = result[0]
+        assert record['string'] == ''
 
     async def test_key_error(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")

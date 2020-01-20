@@ -33,6 +33,10 @@ __all__ = ["what_py_converter", "rows2ch"]
 
 DEF DQ = "'"
 DEF CM = ","
+DEF TUP_OP = '('
+DEF TUP_CLS = ')'
+DEF ARR_OP = '['
+DEF ARR_CLS = ']'
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
@@ -93,25 +97,34 @@ cdef str decode(char* val):
         PyMem_Free(c_value_buffer)
 
 
-
 cdef list seq_parser(str raw):
     """
     Function for parsing tuples and arrays
     """
     cdef:
         list res = [], cur = []
-        bint blocked = False
+        bint in_str = False, in_arr = False, in_tup = False
     if not raw:
         return res
     for sym in raw:
-        if sym == CM and not blocked:
-            PyList_Append(res, PyUnicode_Join("", cur))
-            del cur[:]
-        elif sym == DQ:
-            blocked = not blocked
-            PyList_Append(cur, sym)
-        else:
-            PyList_Append(cur, sym)
+        if not (in_str or in_arr or in_tup):
+            if sym == CM:
+                PyList_Append(res, PyUnicode_Join("", cur))
+                del cur[:]
+                continue
+            elif sym == DQ:
+                in_str = not in_str
+            elif sym == ARR_OP:
+                in_arr = True
+            elif sym == TUP_OP:
+                in_tup = True
+        elif in_str and sym == DQ:
+            in_str = not in_str
+        elif in_arr and sym == ARR_CLS:
+            in_arr = False
+        elif in_tup and sym == TUP_CLS:
+            in_tup = False
+        PyList_Append(cur, sym)
     PyList_Append(res, PyUnicode_Join("", cur))
     return res
 
@@ -361,7 +374,7 @@ cdef class TupleType:
     cdef tuple _convert(self, str string):
         return tuple(
             tp(val)
-            for tp, val in zip(self.types, seq_parser(string.strip("()")))
+            for tp, val in zip(self.types, seq_parser(string[1:-1]))
         )
 
     cpdef tuple p_type(self, str string):
@@ -386,7 +399,7 @@ cdef class ArrayType:
         )
 
     cdef list _convert(self, str string):
-        return [self.type.p_type(val) for val in seq_parser(string.strip("[]"))]
+        return [self.type.p_type(val) for val in seq_parser(string[1:-1])]
 
     cpdef list p_type(self, str string):
         return self._convert(string)

@@ -47,6 +47,10 @@ class BaseType(ABC):
 
     DQ = "'"
     CM = ","
+    TUP_OP = '('
+    TUP_CLS = ')'
+    ARR_OP = '['
+    ARR_CLS = ']'
 
     def __init__(self, name: str, container: bool = False):
         self.name = name
@@ -88,18 +92,30 @@ class BaseType(ABC):
         Returns elements one by one
         """
         cur = []
-        blocked = False
+        in_str = False
+        in_arr = False
+        in_tup = False
         if not raw:
             return None
         for sym in raw:
-            if sym == cls.CM and not blocked:
-                yield "".join(cur)
-                cur = []
-            elif sym == cls.DQ:
-                blocked = not blocked
-                cur.append(sym)
-            else:
-                cur.append(sym)
+            if not (in_str or in_arr or in_tup):
+                if sym == cls.CM:
+                    yield "".join(cur)
+                    cur = []
+                    continue
+                elif sym == cls.DQ:
+                    in_str = not in_str
+                elif sym == cls.ARR_OP:
+                    in_arr = True
+                elif sym == cls.TUP_OP:
+                    in_tup = True
+            elif in_str and sym == cls.DQ:
+                in_str = not in_str
+            elif in_arr and sym == cls.ARR_CLS:
+                in_arr = False
+            elif in_tup and sym == cls.TUP_CLS:
+                in_tup = False
+            cur.append(sym)
         yield "".join(cur)
 
     def convert(self, value: bytes) -> Any:
@@ -220,7 +236,7 @@ class ArrayType(BaseType):
         self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
-        return [self.type.p_type(val) for val in self.seq_parser(string.strip("[]"))]
+        return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
 
     @staticmethod
     def unconvert(value) -> bytes:
