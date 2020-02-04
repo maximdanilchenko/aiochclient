@@ -97,7 +97,7 @@ class ChClient:
         :return: True if connection Ok. False instead.
         """
         async with self._session.get(
-                url=self.url
+            url=self.url
         ) as resp:  # type: client.ClientResponse
             return resp.status == 200
 
@@ -113,7 +113,7 @@ class ChClient:
         return prepared_query_params
 
     async def _execute(
-            self, query: str, *args, json: bool = False, query_params=None
+        self, query: str, *args, json: bool = False, query_params=None
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
         query = query % query_params
@@ -142,7 +142,7 @@ class ChClient:
             data = query.encode()
 
         async with self._session.post(
-                self.url, params=params, data=data
+            self.url, params=params, data=data
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode(errors='replace'))
@@ -249,7 +249,7 @@ class ChClient:
         return None
 
     async def iterate(
-            self, query: str, *args, json: bool = False
+        self, query: str, *args, json: bool = False
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
