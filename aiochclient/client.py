@@ -60,16 +60,16 @@ class ChClient:
     __slots__ = ("_session", "url", "params", "_json")
 
     def __init__(
-            self,
-            session: client.ClientSession,
-            *,
-            url: str = "http://localhost:8123/",
-            user: str = None,
-            password: str = None,
-            database: str = "default",
-            compress_response: bool = False,
-            json=json_,  # type: ignore
-            **settings,
+        self,
+        session: client.ClientSession,
+        *,
+        url: str = "http://localhost:8123/",
+        user: str = None,
+        password: str = None,
+        database: str = "default",
+        compress_response: bool = False,
+        json=json_,  # type: ignore
+        **settings,
     ):
         self._session = session
         self.url = url
