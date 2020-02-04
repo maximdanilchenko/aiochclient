@@ -103,6 +103,8 @@ class ChClient:
 
     @staticmethod
     def _prepare_query_params(params={}):
+        if params is None:
+            return {}
         if not isinstance(params, dict):
             raise TypeError('Query params must be a Dict[str, Any]')
         prepared_query_params = {}
