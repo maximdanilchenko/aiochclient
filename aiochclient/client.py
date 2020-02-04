@@ -11,9 +11,9 @@ from aiochclient.sql import sqlparse
 
 # Optional cython extension:
 try:
-    from aiochclient._types import rows2ch, json2ch
+    from aiochclient._types import rows2ch, json2ch, py2ch
 except ImportError:
-    from aiochclient.types import rows2ch, json2ch
+    from aiochclient.types import rows2ch, json2ch, py2ch
 
 
 class QueryTypes(Enum):
@@ -60,16 +60,16 @@ class ChClient:
     __slots__ = ("_session", "url", "params", "_json")
 
     def __init__(
-        self,
-        session: client.ClientSession,
-        *,
-        url: str = "http://localhost:8123/",
-        user: str = None,
-        password: str = None,
-        database: str = "default",
-        compress_response: bool = False,
-        json=json_,  # type: ignore
-        **settings,
+            self,
+            session: client.ClientSession,
+            *,
+            url: str = "http://localhost:8123/",
+            user: str = None,
+            password: str = None,
+            database: str = "default",
+            compress_response: bool = False,
+            json=json_,  # type: ignore
+            **settings,
     ):
         self._session = session
         self.url = url
@@ -97,13 +97,24 @@ class ChClient:
         :return: True if connection Ok. False instead.
         """
         async with self._session.get(
-            url=self.url
+                url=self.url
         ) as resp:  # type: client.ClientResponse
             return resp.status == 200
 
+    @staticmethod
+    def _prepare_query_params(params={}):
+        if not isinstance(params, dict):
+            raise TypeError('Query params must be a Dict[str, Any]')
+        prepared_query_params = {}
+        for key, value in params.items():
+            prepared_query_params[key] = py2ch(value).decode('utf-8')
+        return prepared_query_params
+
     async def _execute(
-        self, query: str, *args, json: bool = False
+            self, query: str, *args, json: bool = False, query_params=None
     ) -> AsyncGenerator[Record, None]:
+        query_params = self._prepare_query_params(query_params)
+        query = query % query_params
         need_fetch, is_json, statement_type = self._parse_squery(query)
 
         if not is_json and json:
@@ -129,7 +140,7 @@ class ChClient:
             data = query.encode()
 
         async with self._session.post(
-            self.url, params=params, data=data
+                self.url, params=params, data=data
         ) as resp:  # type: client.ClientResponse
             if resp.status != 200:
                 raise ChClientError((await resp.read()).decode(errors='replace'))
@@ -146,7 +157,7 @@ class ChClient:
                     async for line in resp.content:
                         yield rf.new(line)
 
-    async def execute(self, query: str, *args, json: bool = False) -> None:
+    async def execute(self, query: str, *args, json: bool = False, params=None) -> None:
         """Execute query. Returns None.
 
         :param query: Clickhouse query string.
@@ -168,7 +179,7 @@ class ChClient:
 
         :return: Nothing.
         """
-        async for _ in self._execute(query, *args, json=json):
+        async for _ in self._execute(query, *args, json=json, query_params=params):
             return None
 
     async def fetch(self, query: str, *args, json: bool = False) -> List[Record]:
@@ -236,7 +247,7 @@ class ChClient:
         return None
 
     async def iterate(
-        self, query: str, *args, json: bool = False
+            self, query: str, *args, json: bool = False
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
