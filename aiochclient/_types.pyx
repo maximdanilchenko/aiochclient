@@ -1,6 +1,7 @@
 #cython: language_level=3
 import re
 from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
 
 from cpython.datetime cimport date, datetime
@@ -469,6 +470,46 @@ cdef class UUIDType:
         return self._convert(value.decode())
 
 
+cdef class IPv4Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cdef object _convert(self, str string):
+        return IPv4Address(string.strip("'"))
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(value.decode())
+
+
+cdef class IPv6Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cdef object _convert(self, str string):
+        return IPv6Address(string.strip("'"))
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(value.decode())
+
+
 cdef class LowCardinalityType:
 
     cdef:
@@ -535,6 +576,8 @@ cdef dict CH_TYPES_MAPPING = {
     "Decimal32": DecimalType,
     "Decimal64": DecimalType,
     "Decimal128": DecimalType,
+    "IPv4": IPv4Type,
+    "IPv6": IPv6Type,
 }
 
 
@@ -599,6 +642,10 @@ cdef bytes unconvert_uuid(object value):
     return f"'{value}'".encode('latin-1')
 
 
+cdef bytes unconvert_ipaddress(object value):
+    return f"'{value}'".encode('latin-1')
+
+
 cdef bytes unconvert_decimal(object value):
     return f'{value}'.encode('latin-1')
 
@@ -614,6 +661,8 @@ cdef dict PY_TYPES_MAPPING = {
     type(None): unconvert_nullable,
     UUID: unconvert_uuid,
     Decimal: unconvert_decimal,
+    IPv4Address: unconvert_ipaddress,
+    IPv6Address: unconvert_ipaddress,
 }
 
 

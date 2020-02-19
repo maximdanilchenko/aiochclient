@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
+from ipaddress import IPv4Address, IPv6Address
 
 from aiochclient.exceptions import ChClientError
 
@@ -207,6 +208,30 @@ class UUIDType(BaseType):
         return b"%a" % str(value)
 
 
+class IPv4Type(BaseType):
+    def p_type(self, string):
+        return IPv4Address(string.strip("'"))
+
+    def convert(self, value: bytes) -> IPv4Address:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value: UUID) -> bytes:
+        return b"%a" % str(value)
+
+
+class IPv6Type(BaseType):
+    def p_type(self, string):
+        return IPv6Address(string.strip("'"))
+
+    def convert(self, value: bytes) -> IPv6Address:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value: UUID) -> bytes:
+        return b"%a" % str(value)
+
+
 class TupleType(BaseType):
 
     __slots__ = ("name", "types")
@@ -320,6 +345,8 @@ CH_TYPES_MAPPING = {
     "Decimal32": DecimalType,
     "Decimal64": DecimalType,
     "Decimal128": DecimalType,
+    "IPv4": IPv4Type,
+    "IPv6": IPv6Type,
 }
 
 PY_TYPES_MAPPING = {
@@ -333,6 +360,8 @@ PY_TYPES_MAPPING = {
     type(None): NullableType.unconvert,
     UUID: UUIDType.unconvert,
     Decimal: DecimalType.unconvert,
+    IPv4Address: IPv4Type.unconvert,
+    IPv6Address: IPv6Type.unconvert,
 }
 
 

@@ -1,5 +1,6 @@
 import datetime as dt
 from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 from uuid import uuid4
 
 import aiohttp
@@ -58,6 +59,8 @@ def rows(uuid):
             Decimal('1234.56'),
             Decimal('123.56'),
             [[1, 2, 3], [1, 2], [6, 7]],
+            IPv4Address('116.253.40.133'),
+            IPv6Address('2001:44c8:129:2632:33:0:252:2'),
         ),
         (
             2,
@@ -96,6 +99,8 @@ def rows(uuid):
             Decimal('1234.56'),
             Decimal('123.56'),
             [],
+            None,
+            None,
         ),
     ]
 
@@ -157,7 +162,9 @@ async def all_types_db(chclient, rows):
                             decimal64 Decimal64(2),
                             decimal128 Decimal128(6),
                             decimal Decimal(6, 3),
-                            array_array_int Array(Array(Int32))
+                            array_array_int Array(Array(Int32)),
+                            ipv4 Nullable(IPv4),
+                            ipv6 Nullable(IPv6)
                             ) ENGINE = Memory
     """
     )
@@ -420,6 +427,12 @@ class TestTypes:
 
     async def test_array_of_arrays(self):
         assert await self.select_field("array_array_int") == [[1, 2, 3], [1, 2], [6, 7]]
+
+    async def test_ipv4(self):
+        assert await self.select_field("ipv4") == IPv4Address('116.253.40.133')
+
+    async def test_ipv6(self):
+        assert await self.select_field("ipv6") == IPv6Address('2001:44c8:129:2632:33:0:252:2')
 
 
 @pytest.mark.fetching
