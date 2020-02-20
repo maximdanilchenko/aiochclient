@@ -432,7 +432,9 @@ class TestTypes:
         assert await self.select_field("ipv4") == IPv4Address('116.253.40.133')
 
     async def test_ipv6(self):
-        assert await self.select_field("ipv6") == IPv6Address('2001:44c8:129:2632:33:0:252:2')
+        assert await self.select_field("ipv6") == IPv6Address(
+            '2001:44c8:129:2632:33:0:252:2'
+        )
 
 
 @pytest.mark.fetching

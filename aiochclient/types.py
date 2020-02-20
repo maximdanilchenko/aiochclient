@@ -2,9 +2,9 @@ import datetime as dt
 import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
-from ipaddress import IPv4Address, IPv6Address
 
 from aiochclient.exceptions import ChClientError
 
