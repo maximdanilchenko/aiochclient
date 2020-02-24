@@ -116,7 +116,10 @@ class ChClient:
         self, query: str, *args, json: bool = False, query_params: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
-        query = query % query_params
+        print(query_params)
+        print(query)
+        query %= query_params
+        print(query)
         need_fetch, is_json, statement_type = self._parse_squery(query)
 
         if not is_json and json:
