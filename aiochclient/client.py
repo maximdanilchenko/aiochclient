@@ -61,7 +61,7 @@ class ChClient:
 
     def __init__(
         self,
-        session: client.ClientSession,
+            session: client.ClientSession,
         *,
         url: str = "http://localhost:8123/",
         user: str = None,
@@ -102,7 +102,7 @@ class ChClient:
             return resp.status == 200
 
     @staticmethod
-    def _prepare_query_params(params={}):
+    def _prepare_query_params(params: Optional[dict] = None):
         if params is None:
             return {}
         if not isinstance(params, dict):
@@ -113,7 +113,7 @@ class ChClient:
         return prepared_query_params
 
     async def _execute(
-        self, query: str, *args, json: bool = False, query_params=None
+        self, query: str, *args, json: bool = False, query_params: Optional[dict] = None
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
         query = query % query_params
@@ -159,12 +159,13 @@ class ChClient:
                     async for line in resp.content:
                         yield rf.new(line)
 
-    async def execute(self, query: str, *args, json: bool = False, params=None) -> None:
+    async def execute(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> None:
         """Execute query. Returns None.
 
-        :param query: Clickhouse query string.
+        :param str query: Clickhouse query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[dict] params: Params to escape inside query string.
 
         Usage:
 
@@ -178,17 +179,24 @@ class ChClient:
                 (1, (dt.date(2018, 9, 7), None)),
                 (2, (dt.date(2018, 9, 8), 3.14)),
             )
+            await client.execute(
+                "INSERT INTO {table_name} VALUES",
+                (1, (dt.date(2018, 9, 7), None)),
+                (2, (dt.date(2018, 9, 8), 3.14)),
+                params={"table_name": "t"}
+            )
 
         :return: Nothing.
         """
         async for _ in self._execute(query, *args, json=json, query_params=params):
             return None
 
-    async def fetch(self, query: str, *args, json: bool = False) -> List[Record]:
+    async def fetch(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[dict] params: Params to escape inside query string.
 
         Usage:
 
@@ -198,13 +206,14 @@ class ChClient:
 
         :return: All rows from query.
         """
-        return [row async for row in self._execute(query, *args, json=json)]
+        return [row async for row in self._execute(query, *args, json=json, query_params=params)]
 
-    async def fetchrow(self, query: str, *args, json: bool = False) -> Optional[Record]:
+    async def fetchrow(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[dict] params: Params to escape inside query string.
 
         Usage:
 
@@ -216,7 +225,7 @@ class ChClient:
 
         :return: First row from query or None if there no results.
         """
-        async for row in self._execute(query, *args, json=json):
+        async for row in self._execute(query, *args, json=json, query_params=params):
             return row
         return None
 
@@ -228,11 +237,12 @@ class ChClient:
         )
         return await self.fetchrow(query, *args)
 
-    async def fetchval(self, query: str, *args, json: bool = False) -> Any:
+    async def fetchval(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[dict] params: Params to escape inside query string.
 
         Usage:
 
@@ -243,18 +253,19 @@ class ChClient:
 
         :return: First value of the first row or None if there no results.
         """
-        async for row in self._execute(query, *args, json=json):
+        async for row in self._execute(query, *args, json=json, query_params=params):
             if row:
                 return row[0]
         return None
 
     async def iterate(
-        self, query: str, *args, json: bool = False
+        self, query: str, *args, json: bool = False, params: Optional[dict] = None
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
         :param str query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[dict] params: Params to escape inside query string.
 
         Usage:
 
@@ -265,9 +276,15 @@ class ChClient:
             ):
                 assert row[0] * 2 == row[1]
 
+            async for row in client.iterate(
+                "SELECT number, number*2 FROM system.numbers LIMIT {numbers_limit}",
+                params={"numbers_limit": 10000}
+            ):
+                assert row[0] * 2 == row[1]
+
         :return: Rows one by one.
         """
-        async for row in self._execute(query, *args, json=json):
+        async for row in self._execute(query, *args, json=json, query_params=params):
             yield row
 
     async def cursor(self, query: str, *args) -> AsyncGenerator[Record, None]:
