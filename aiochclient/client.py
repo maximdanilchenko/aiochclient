@@ -1,7 +1,7 @@
 import json as json_
 import warnings
 from enum import Enum
-from typing import Any, AsyncGenerator, List, Optional
+from typing import Any, AsyncGenerator, List, Optional, Dict
 
 from aiohttp import client
 
@@ -102,7 +102,7 @@ class ChClient:
             return resp.status == 200
 
     @staticmethod
-    def _prepare_query_params(params: Optional[dict] = None):
+    def _prepare_query_params(params: Optional[Dict[str, Any]] = None):
         if params is None:
             return {}
         if not isinstance(params, dict):
@@ -113,7 +113,7 @@ class ChClient:
         return prepared_query_params
 
     async def _execute(
-        self, query: str, *args, json: bool = False, query_params: Optional[dict] = None
+        self, query: str, *args, json: bool = False, query_params: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
         query = query % query_params
@@ -159,13 +159,13 @@ class ChClient:
                     async for line in resp.content:
                         yield rf.new(line)
 
-    async def execute(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> None:
+    async def execute(self, query: str, *args, json: bool = False, params: Optional[Dict[str, Any]] = None) -> None:
         """Execute query. Returns None.
 
         :param str query: Clickhouse query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[dict] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
@@ -191,12 +191,12 @@ class ChClient:
         async for _ in self._execute(query, *args, json=json, query_params=params):
             return None
 
-    async def fetch(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> List[Record]:
+    async def fetch(self, query: str, *args, json: bool = False, params: Optional[Dict[str, Any]] = None) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[dict] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
@@ -208,12 +208,12 @@ class ChClient:
         """
         return [row async for row in self._execute(query, *args, json=json, query_params=params)]
 
-    async def fetchrow(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> Optional[Record]:
+    async def fetchrow(self, query: str, *args, json: bool = False, params: Optional[Dict[str, Any]] = None) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[dict] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
@@ -237,12 +237,12 @@ class ChClient:
         )
         return await self.fetchrow(query, *args)
 
-    async def fetchval(self, query: str, *args, json: bool = False, params: Optional[dict] = None) -> Any:
+    async def fetchval(self, query: str, *args, json: bool = False, params: Optional[Dict[str, Any]] = None) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[dict] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
@@ -259,13 +259,13 @@ class ChClient:
         return None
 
     async def iterate(
-        self, query: str, *args, json: bool = False, params: Optional[dict] = None
+        self, query: str, *args, json: bool = False, params: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
         :param str query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[dict] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
