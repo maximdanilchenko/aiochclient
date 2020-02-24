@@ -430,6 +430,11 @@ class TestFetching:
             :
         ] == self.rows[0]
 
+    async def test_fetchrow_full_with_params(self):
+        assert (await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8={u8}", params={"u8": 1}))[
+               :
+               ] == self.rows[0]
+
     async def test_fetchrow_with_empties(self):
         assert (await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2"))[
             :
@@ -464,15 +469,31 @@ class TestFetching:
         rows = await self.ch.fetch("SELECT * FROM all_types")
         assert [row[:] for row in rows] == self.rows
 
+    async def test_fetch_with_params(self):
+        rows = await self.ch.fetch("SELECT * FROM {table_name}", params={"table_name": "all_types"})
+        assert [row[:] for row in rows] == self.rows
+
     async def test_cursor(self):
         assert [
             row[:] async for row in self.ch.cursor("SELECT * FROM all_types")
         ] == self.rows
 
+    async def test_cursor_with_params(self):
+        assert [
+                   row[:] async for row in
+                   self.ch.cursor("SELECT * FROM {table_name}", params={"table_name": "all_types"})
+               ] == self.rows
+
     async def test_iterate(self):
         assert [
             row[:] async for row in self.ch.iterate("SELECT * FROM all_types")
         ] == self.rows
+
+    async def test_iterate_with_params(self):
+        assert [
+                   row[:] async for row in
+                   self.ch.iterate("SELECT * FROM {table_name}", params={"table_name": "all_types"})
+               ] == self.rows
 
     async def test_select_with_execute(self):
         assert (await self.ch.execute("SELECT * FROM all_types WHERE uint8=1")) is None
