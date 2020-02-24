@@ -1,7 +1,7 @@
 import json as json_
 import warnings
 from enum import Enum
-from typing import Any, AsyncGenerator, List, Optional, Dict
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from aiohttp import client
 
@@ -116,10 +116,7 @@ class ChClient:
         self, query: str, *args, json: bool = False, query_params: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
-        print(query_params)
-        print(query)
-        query %= query_params
-        print(query)
+        query = query.format(**query_params)
         need_fetch, is_json, statement_type = self._parse_squery(query)
 
         if not is_json and json:
