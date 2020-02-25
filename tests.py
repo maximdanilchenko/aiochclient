@@ -445,6 +445,11 @@ class TestFetching:
             :
         ] == self.rows[0]
 
+    async def test_fetchrow_full_with_params(self):
+        assert (await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8={u8}", params={"u8": 1}))[
+               :
+               ] == self.rows[0]
+
     async def test_fetchrow_with_empties(self):
         assert (await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2"))[
             :
@@ -453,6 +458,10 @@ class TestFetching:
     async def test_fetchrow_none_result(self):
         assert (
             await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=42")
+        ) is None
+    async def test_fetchrow_none_result_with_params(self):
+        assert (
+            await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8={u8}", params={'u8': 42})
         ) is None
 
     async def test_fetchone_full(self):
@@ -473,6 +482,11 @@ class TestFetching:
     async def test_fetchval_none_result(self):
         assert (
             await self.ch.fetchval("SELECT uint8 FROM all_types WHERE uint8=42")
+        ) is None
+
+    async def test_fetchval_none_result_with_params(self):
+        assert (
+            await self.ch.fetchval("SELECT uint8 FROM all_types WHERE uint8={u8}", params={"u8": 42})
         ) is None
 
     async def test_fetch(self):
