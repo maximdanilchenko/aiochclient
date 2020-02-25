@@ -61,7 +61,7 @@ class ChClient:
 
     def __init__(
         self,
-            session: client.ClientSession,
+        session: client.ClientSession,
         *,
         url: str = "http://localhost:8123/",
         user: str = None,
