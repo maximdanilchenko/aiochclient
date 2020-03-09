@@ -96,10 +96,11 @@ class ChClient:
 
         :return: True if connection Ok. False instead.
         """
-        async with self._session.get(
-            url=self.url
-        ) as resp:  # type: client.ClientResponse
-            return resp.status == 200
+        try:
+            await self._execute('SELECT 1')
+        except ChClientError:
+            return False
+        return True
 
     @staticmethod
     def _prepare_query_params(params: Optional[Dict[str, Any]] = None):
