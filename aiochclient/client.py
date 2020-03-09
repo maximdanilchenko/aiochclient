@@ -97,7 +97,7 @@ class ChClient:
         :return: True if connection Ok. False instead.
         """
         try:
-            await self._execute('SELECT 1')
+            await self.execute('SELECT 1')
         except ChClientError:
             return False
         return True
