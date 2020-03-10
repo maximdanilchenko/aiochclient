@@ -134,11 +134,13 @@ from ClickHouse response and for client INSERT queries.
 | `Decimal32` | `decimal.Decimal` |
 | `Decimal64` | `decimal.Decimal` |
 | `Decimal128` | `decimal.Decimal` |
+| `IPv4` | `ipaddress.IPv4Address` |
+| `IPv6` | `ipaddress.IPv6Address` |
+| `UUID` | `uuid.UUID` |
+| `Nothing` | `None` |
 | `Tuple(T1, T2, ...)` | `Tuple[T1, T2, ...]` |
 | `Array(T)` | `List[T]` |
-| `UUID` | `uuid.UUID` |
 | `Nullable(T)` | `None` or `T` |
-| `Nothing` | `None` |
 | `LowCardinality(T)` | `T` |
 
 ## Connection pool
