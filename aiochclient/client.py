@@ -96,7 +96,9 @@ class ChClient:
 
         :return: True if connection Ok. False instead.
         """
-        async with self._session.get(url=self.url, params={**self.params, "query": "SELECT 1"}) as resp:
+        async with self._session.get(
+            url=self.url, params={**self.params, "query": "SELECT 1"}
+        ) as resp:
             return resp.status == 200
 
     @staticmethod
