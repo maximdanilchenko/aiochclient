@@ -3,11 +3,14 @@ import warnings
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from aiohttp import client
-
+try:
+    import httpx
+except ImportError:
+    httpx = None
 from aiochclient.exceptions import ChClientError
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
 from aiochclient.sql import sqlparse
+from aiohttp import client
 
 # Optional cython extension:
 try:
@@ -96,10 +99,14 @@ class ChClient:
 
         :return: True if connection Ok. False instead.
         """
-        async with self._session.get(
-            url=self.url
-        ) as resp:  # type: client.ClientResponse
-            return resp.status == 200
+        if isinstance(self._session, client.ClientSession):
+            async with self._session.get(
+                url=self.url
+            ) as resp:  # type: client.ClientResponse
+                return resp.status == 200
+        elif httpx is not None and isinstance(self._session, httpx.AsyncClient):
+            resp = await self._session.get(self.url)
+            return resp.status_code != 200
 
     @staticmethod
     def _prepare_query_params(params: Optional[Dict[str, Any]] = None):
@@ -145,23 +152,51 @@ class ChClient:
             params = self.params
             data = query.encode()
 
-        async with self._session.post(
-            self.url, params=params, data=data
-        ) as resp:  # type: client.ClientResponse
-            if resp.status != 200:
-                raise ChClientError((await resp.read()).decode(errors='replace'))
+        if isinstance(self._session, client.ClientSession):
+            async with self._session.post(
+                self.url, params=params, data=data
+            ) as resp:  # type: client.ClientResponse
+                if resp.status != 200:
+                    raise ChClientError((await resp.read()).decode(errors='replace'))
+                if need_fetch:
+                    if is_json:
+                        rf = FromJsonFabric(loads=self._json.loads)
+                        async for line in resp.content:
+                            yield rf.new(line)
+                    else:
+                        rf = RecordsFabric(
+                            names=await resp.content.readline(),
+                            tps=await resp.content.readline(),
+                        )
+                        async for line in resp.content:
+                            yield rf.new(line)
+
+        elif httpx is not None and isinstance(self._session, httpx.AsyncClient):
+            resp = await self._session.post(self.url, params=params, data=data)
+            if resp.status_code != 200:
+                raise ChClientError(await resp.aread())
             if need_fetch:
                 if is_json:
                     rf = FromJsonFabric(loads=self._json.loads)
-                    async for line in resp.content:
+                    async for line in resp.aiter_lines():
+                        #print("(HX) JSON:", line)
+                        # FIXME the rest of the code needs 'bytes'
+                        line = bytes(line, resp.encoding)
                         yield rf.new(line)
                 else:
-                    rf = RecordsFabric(
-                        names=await resp.content.readline(),
-                        tps=await resp.content.readline(),
-                    )
-                    async for line in resp.content:
-                        yield rf.new(line)
+                    count = 0
+                    async for line in resp.aiter_lines():
+                        # FIXME the rest of the code needs 'bytes'
+                        line = bytes(line, resp.encoding)
+                        if count == 0:
+                            names = line
+                            count += 1
+                        elif count == 1:
+                            rf = RecordsFabric(names=names, tps=line)
+                            count += 1
+                        else:
+                            #print("(HX) TSV:", line)
+                            yield rf.new(line)
 
     async def execute(
         self,
