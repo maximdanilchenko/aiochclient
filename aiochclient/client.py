@@ -1,7 +1,8 @@
 import json as json_
 import warnings
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Type
+from types import TracebackType
 
 from aiohttp import client
 
@@ -61,8 +62,7 @@ class ChClient:
 
     def __init__(
         self,
-        session: client.ClientSession,
-        *,
+        session: client.ClientSession = None,
         url: str = "http://localhost:8123/",
         user: str = None,
         password: str = None,
@@ -72,6 +72,8 @@ class ChClient:
         **settings,
     ):
         self._session = session
+        if not session:
+            self._session = client.ClientSession()
         self.url = url
         self.params = {}
         if user:
@@ -84,6 +86,21 @@ class ChClient:
             self.params["enable_http_compression"] = 1
         self._json = json
         self.params.update(settings)
+
+    async def __aenter__(self) -> 'ChClient':
+        return self
+
+    async def __aexit__(self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType]
+    ) -> None:
+        await self.close()
+
+    async def close(self) -> None:
+        """Close the session
+        """
+        await self._session.close()
 
     async def is_alive(self) -> bool:
         """Checks if connection is Ok.
