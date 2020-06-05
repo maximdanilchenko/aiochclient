@@ -15,7 +15,7 @@ env:
   - REQUIREMENTS=dev-requirements/dev-requirements-ciso.txt
   - REQUIREMENTS=dev-requirements/dev-requirements-cython-ciso.txt
 install:
-  - pip install -r $REQUIREMENTS
+  - pip install -r $REQUIREMENTS --upgrade
   - pip install -e .
 script:
   - make check_format
