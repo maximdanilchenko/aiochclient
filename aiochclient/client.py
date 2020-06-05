@@ -1,8 +1,8 @@
 import json as json_
 import warnings
 from enum import Enum
-from typing import Any, AsyncGenerator, Dict, List, Optional, Type
 from types import TracebackType
+from typing import Any, AsyncGenerator, Dict, List, Optional, Type
 
 from aiohttp import client
 
@@ -90,10 +90,11 @@ class ChClient:
     async def __aenter__(self) -> 'ChClient':
         return self
 
-    async def __aexit__(self,
+    async def __aexit__(
+        self,
         exc_type: Optional[Type[BaseException]],
         exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType]
+        exc_tb: Optional[TracebackType],
     ) -> None:
         await self.close()
 
