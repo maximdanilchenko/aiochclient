@@ -4,6 +4,7 @@ from ipaddress import IPv4Address, IPv6Address
 from uuid import uuid4
 
 import aiohttp
+import httpx
 import pytest
 
 from aiochclient import ChClient, ChClientError
@@ -105,6 +106,11 @@ def rows(uuid):
     ]
 
 
+@pytest.fixture(params=[aiohttp.ClientSession, httpx.AsyncClient])
+def http_client(request):
+    return request.param
+
+
 @pytest.fixture(
     params=[
         {
@@ -117,9 +123,9 @@ def rows(uuid):
         {"allow_suspicious_low_cardinality_types": 1},
     ]
 )
-async def chclient(request):
-    async with aiohttp.ClientSession() as s:
-        yield ChClient(s, **request.param)
+async def chclient(request, http_client):
+    async with ChClient(http_client(), **request.param) as chclient:
+        yield chclient
 
 
 @pytest.fixture

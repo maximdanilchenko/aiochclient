@@ -29,7 +29,7 @@ else:
     datetime_parse = date_parse = ciso8601.parse_datetime
 
 
-__all__ = ["what_py_converter", "rows2ch"]
+__all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
 
 
 DEF DQ = "'"

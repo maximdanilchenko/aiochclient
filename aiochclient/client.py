@@ -4,9 +4,8 @@ from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
 
-from aiohttp import client
-
 from aiochclient.exceptions import ChClientError
+from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
 from aiochclient.sql import sqlparse
 
@@ -58,22 +57,23 @@ class ChClient:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
-    __slots__ = ("_session", "url", "params", "_json")
+    __slots__ = ("_session", "url", "params", "_json", "_http_client")
 
     def __init__(
         self,
-        session: client.ClientSession = None,
+        session=None,
         url: str = "http://localhost:8123/",
         user: str = None,
         password: str = None,
         database: str = "default",
         compress_response: bool = False,
         json=json_,  # type: ignore
+        _http_client: HttpClientABC = None,
         **settings,
     ):
-        self._session = session
-        if not session:
-            self._session = client.ClientSession()
+        if not _http_client:
+            _http_client = HttpClientABC.choose_http_client(session)
+        self._http_client = _http_client(session)
         self.url = url
         self.params = {}
         if user:
@@ -101,7 +101,7 @@ class ChClient:
     async def close(self) -> None:
         """Close the session
         """
-        await self._session.close()
+        await self._http_client.close()
 
     async def is_alive(self) -> bool:
         """Checks if connection is Ok.
@@ -114,10 +114,13 @@ class ChClient:
 
         :return: True if connection Ok. False instead.
         """
-        async with self._session.get(
-            url=self.url, params={**self.params, "query": "SELECT 1"}
-        ) as resp:
-            return resp.status == 200
+        try:
+            await self._http_client.get(
+                url=self.url, params={**self.params, "query": "SELECT 1"}
+            )
+        except ChClientError:
+            return False
+        return True
 
     @staticmethod
     def _prepare_query_params(params: Optional[Dict[str, Any]] = None):
@@ -163,23 +166,24 @@ class ChClient:
             params = self.params
             data = query.encode()
 
-        async with self._session.post(
-            self.url, params=params, data=data
-        ) as resp:  # type: client.ClientResponse
-            if resp.status != 200:
-                raise ChClientError((await resp.read()).decode(errors='replace'))
-            if need_fetch:
-                if is_json:
-                    rf = FromJsonFabric(loads=self._json.loads)
-                    async for line in resp.content:
-                        yield rf.new(line)
-                else:
-                    rf = RecordsFabric(
-                        names=await resp.content.readline(),
-                        tps=await resp.content.readline(),
-                    )
-                    async for line in resp.content:
-                        yield rf.new(line)
+        if need_fetch:
+            response = self._http_client.post_return_lines(
+                url=self.url, params=params, data=data
+            )
+            if is_json:
+                rf = FromJsonFabric(loads=self._json.loads)
+                async for line in response:
+                    yield rf.new(line)
+            else:
+                rf = RecordsFabric(
+                    names=await response.__anext__(), tps=await response.__anext__(),
+                )
+                async for line in response:
+                    yield rf.new(line)
+        else:
+            await self._http_client.post_no_return(
+                url=self.url, params=params, data=data
+            )
 
     async def execute(
         self,

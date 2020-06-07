@@ -7,5 +7,3 @@ class ChClientError(Exception):
 
     - Clickhouse returns some errors.
     """
-
-    pass

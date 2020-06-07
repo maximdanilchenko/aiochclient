@@ -1,3 +1,4 @@
+import warnings
 from distutils.command.build_ext import build_ext
 from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
 
@@ -57,7 +58,8 @@ setup_opts = dict(
     packages=find_packages(exclude=('test*',)),
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
-    install_requires=['aiohttp>=3.0.1', 'sqlparse>=0.3.0'],
+    # aiohttp in main requires will be deprecated since 2.0.0
+    install_requires=['sqlparse>=0.3.0', 'aiohttp>=3.0.1'],
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
@@ -73,7 +75,16 @@ setup_opts = dict(
     ],
     test_suite='tests',
     ext_modules=extensions,
-    extras_require={'speedups': ['aiodns', 'cchardet', 'ciso8601>=2.1.1']},
+    extras_require={
+        # aiohttp client
+        'aiohttp': ['aiohttp>=3.0.1'],
+        'aiohttp-speedups': ['aiodns', 'cchardet', 'ciso8601>=2.1.1', 'aiohttp>=3.0.1'],
+        # httpx client
+        'httpx': ['httpx'],
+        'httpx-speedups': ['ciso8601>=2.1.1', 'httpx'],
+        # will be deprecated since 2.0.0:
+        'speedups': ['aiodns', 'cchardet', 'ciso8601>=2.1.1', 'aiohttp>=3.0.1'],
+    },
     cmdclass=dict(build_ext=ve_build_ext),
 )
 
@@ -86,3 +97,13 @@ except BuildFailed:
     del setup_opts['ext_modules']
     del setup_opts['cmdclass']
     setup(**setup_opts)
+finally:
+    warnings.warn(
+        "aiohttp in main requires will be deprecated"
+        " since 2.0.0. Please  specify aiohttp or httpx in dependeces or use "
+        "'pip install aiochclient[aiohttp]' or 'pip install "
+        "aiochclient[aiohttp-speedups]' for aiohttp client usage or "
+        "'pip install aiochclient[httpx]' or pip install "
+        "aiochclient[httpx-speedups] for httpx client usage!",
+        DeprecationWarning,
+    )

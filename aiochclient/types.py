@@ -21,7 +21,7 @@ except ImportError:
         return dt.datetime.strptime(string, '%Y-%m-%d')
 
 
-__all__ = ["what_py_converter", "rows2ch"]
+__all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
 
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
