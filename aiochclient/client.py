@@ -68,11 +68,9 @@ class ChClient:
         database: str = "default",
         compress_response: bool = False,
         json=json_,  # type: ignore
-        _http_client: HttpClientABC = None,
         **settings,
     ):
-        if not _http_client:
-            _http_client = HttpClientABC.choose_http_client(session)
+        _http_client = HttpClientABC.choose_http_client(session)
         self._http_client = _http_client(session)
         self.url = url
         self.params = {}
