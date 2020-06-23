@@ -1,5 +1,5 @@
 ===============
-aichclient
+aiochclient
 ===============
 
 Async http(s) clickhouse client for python 3.6+ with types converting in both directions and streaming support
@@ -8,5 +8,6 @@ Async http(s) clickhouse client for python 3.6+ with types converting in both di
     :maxdepth: 2
     :caption: Contents:
 
-    install
-    api
+    introduction
+    install-docs
+    reference
