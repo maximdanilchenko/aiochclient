@@ -68,6 +68,7 @@ def row_data():
         uuid.uuid4(),
     )
 
+
 def json_data():
     return {
         "a": 1,
@@ -80,8 +81,9 @@ def json_data():
         "h": "hello",
         "j": None,
         "k": ["q", "w", "e", "r"],
-        "u": uuid.uuid4()
+        "u": uuid.uuid4(),
     }
+
 
 async def prepare_db(client):
     await client.execute("DROP TABLE IF EXISTS benchmark_tbl")
@@ -173,6 +175,7 @@ async def bench_inserts(*, retries: int, rows: int):
     )
     print(f"  Speed: {speed} rows/sec")
 
+
 async def bench_inserts_json(*, retries: int, rows: int):
     print("AIOCHCLIENT json inserts")
     async with ClientSession() as s:
@@ -184,7 +187,8 @@ async def bench_inserts_json(*, retries: int, rows: int):
         start_time = time.time()
         for _ in range(retries):
             await client.execute(
-                "INSERT INTO benchmark_tbl FORMAT JSONEachRow", *(one_row for _ in range(rows))
+                "INSERT INTO benchmark_tbl FORMAT JSONEachRow",
+                *(one_row for _ in range(rows)),
             )
         total_time = time.time() - start_time
         avg_time = total_time / retries

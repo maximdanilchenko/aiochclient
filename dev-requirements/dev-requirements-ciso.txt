@@ -12,3 +12,4 @@ sphinx_rtd_theme
 black
 isort==4.3.21
 ciso8601>=2.1.1
+orjson>=3.3.1

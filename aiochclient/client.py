@@ -1,8 +1,9 @@
-import orjson as json_
 import warnings
 from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
+
+import orjson as json_
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
