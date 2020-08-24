@@ -33,6 +33,9 @@ selects with decoding
 inserts
 - Avg time for inserting 10000 rows from 100 runs: 0.13569785118103028 sec. Total: 13.569785118103027
   Speed: 73693 rows/sec
+json inserts
+- Avg time for inserting 10000 rows from 100 runs: 0.039186043739318846 sec. Total: 3.9186043739318848
+  Speed: 255192 rows/sec
 AIOCH
 selects with decoding
 - Avg time for selecting 10000 rows from 100 runs: 0.32889273166656496 sec. Total: 32.889273166656494
@@ -171,7 +174,7 @@ async def bench_inserts(*, retries: int, rows: int):
     print(f"  Speed: {speed} rows/sec")
 
 async def bench_inserts_json(*, retries: int, rows: int):
-    print("AIOCHCLIENT inserts")
+    print("AIOCHCLIENT json inserts")
     async with ClientSession() as s:
         client = ChClient(s, compress_response=True)
         # prepare environment
