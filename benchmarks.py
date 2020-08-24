@@ -65,6 +65,20 @@ def row_data():
         uuid.uuid4(),
     )
 
+def json_data():
+    return {
+        "a": 1,
+        "b": 2,
+        "c": 3.14,
+        "d": "hello",
+        "e": "world world \nman",
+        "f": dt.date.today(),
+        "g": int(dt.datetime.utcnow().timestamp()),
+        "h": "hello",
+        "j": None,
+        "k": ["q", "w", "e", "r"],
+        "u": uuid.uuid4()
+    }
 
 async def prepare_db(client):
     await client.execute("DROP TABLE IF EXISTS benchmark_tbl")
@@ -156,6 +170,27 @@ async def bench_inserts(*, retries: int, rows: int):
     )
     print(f"  Speed: {speed} rows/sec")
 
+async def bench_inserts_json(*, retries: int, rows: int):
+    print("AIOCHCLIENT inserts")
+    async with ClientSession() as s:
+        client = ChClient(s, compress_response=True)
+        # prepare environment
+        await prepare_db(client)
+        # actual testing
+        one_row = json_data()
+        start_time = time.time()
+        for _ in range(retries):
+            await client.execute(
+                "INSERT INTO benchmark_tbl FORMAT JSONEachRow", *(one_row for _ in range(rows))
+            )
+        total_time = time.time() - start_time
+        avg_time = total_time / retries
+        speed = int(1 / avg_time * rows)
+    print(
+        f"- Avg time for inserting {rows} json rows from {retries} runs: {avg_time} sec. Total: {total_time}"
+    )
+    print(f"  Speed: {speed} rows/sec")
+
 
 async def bench_selects_aioch_with_decoding(*, retries: int, rows: int):
     print("AIOCH selects with decoding")
@@ -183,6 +218,7 @@ async def main():
     await bench_selects(retries=100, rows=10000)
     await bench_selects_with_decoding(retries=100, rows=10000)
     await bench_inserts(retries=100, rows=10000)
+    await bench_inserts_json(retries=100, rows=10000)
 
     await bench_selects_aioch_with_decoding(retries=100, rows=10000)
 

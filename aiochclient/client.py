@@ -1,4 +1,4 @@
-import json as json_
+import orjson as json_
 import warnings
 from enum import Enum
 from types import TracebackType
