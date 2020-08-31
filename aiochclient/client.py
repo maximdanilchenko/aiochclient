@@ -97,8 +97,7 @@ class ChClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the session
-        """
+        """Close the session"""
         await self._http_client.close()
 
     async def is_alive(self) -> bool:
@@ -174,7 +173,8 @@ class ChClient:
                     yield rf.new(line)
             else:
                 rf = RecordsFabric(
-                    names=await response.__anext__(), tps=await response.__anext__(),
+                    names=await response.__anext__(),
+                    tps=await response.__anext__(),
                 )
                 async for line in response:
                     yield rf.new(line)
