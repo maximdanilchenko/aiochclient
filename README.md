@@ -1,5 +1,4 @@
 # aiochclient
-### Async http(s) ClickHouse client for python 3.6+ with types converting in both directions, streaming support, lazy decoding on select queries and fully typed interface
 
 [![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
 [![Travis CI](https://travis-ci.org/maximdanilchenko/aiochclient.svg?branch=master)](https://travis-ci.org/maximdanilchenko/aiochclient)
@@ -7,34 +6,42 @@
 [![codecov](https://codecov.io/gh/maximdanilchenko/aiochclient/branch/master/graph/badge.svg)](https://codecov.io/gh/maximdanilchenko/aiochclient)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
-## Contents
+An async http(s) ClickHouse client for python 3.6+ supporting type
+conversion in both directions, streaming, lazy decoding on select queries, and a
+fully typed interface
 
-- [Install](#install)
-- [Quick start](#quick-start)
-- [Types converting](#types-converting)
-- [Connection pool](#connection-pool)
-- [Speed](#speed)
+## Table of Contents
 
-## Install
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Type Conversion](#type-conversion)
+- [Connection Pool Settings](#connection-pool-settings)
+- [Notes on Speed](#notes-on-speed)
+
+## Installation
 ```
 > pip install aiochclient
 ```
-Or to install with extras requirements for speedup:
+Or to install with extra requirements for speedup:
 ```
 > pip install aiochclient[speedups]
 ```
-It will additionally install [cChardet](https://pypi.python.org/pypi/cchardet) 
-and [aiodns](https://pypi.python.org/pypi/aiodns) for `aiohttp` speedup 
-and [ciso8601](https://github.com/closeio/ciso8601) for ultra fast 
-datetime parsing while decoding data from ClickHouse.
 
-Also while installing it will try to build Cython extensions for speed boost (about 30%).
+Installing with `[speedups]` adds the following:
+- [cChardet](https://pypi.python.org/pypi/cchardet) 
+- [aiodns](https://pypi.python.org/pypi/aiodns) for `aiohttp` speedup
+- [ciso8601](https://github.com/closeio/ciso8601) for ultra fast datetime
+  parsing while decoding data from ClickHouse.
 
-## Quick start
+Additionally the installation process attempts to use Cython for a speed boost
+(roughly 30% faster).
+
+## Quick Start
 
 ### Connecting to ClickHouse
 
-`aiochclient` needs `aiohttp.ClientSession` for connecting:
+`aiochclient` needs `aiohttp.ClientSession` to connect to ClickHouse:
 
 ```python
 from aiochclient import ChClient
@@ -48,13 +55,16 @@ async def main():
 
 ```
 
-### Making queries
+### Querying the database
+
 ```python
 await client.execute(
     "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
 )
 ```
-For INSERT queries you can pass values as `*args`. Values should be iterables:
+
+For INSERT queries you can pass values as `*args`. Values should be
+iterables:
 ```python
 await client.execute(
     "INSERT INTO t VALUES",
@@ -62,26 +72,35 @@ await client.execute(
     (2, (dt.date(2018, 9, 8), 3.14)),
 )
 ```
-For fetching all rows at once use `fetch` method:
+
+For fetching all rows at once use the
+[`fetch`](https://aiochclient.readthedocs.io/en/latest/api.html#aiochclient.ChClient.fetch)
+method:
 ```python
 all_rows = await client.fetch("SELECT * FROM t")
 ```
-For fetching first row from result use `fetchrow` method:
+
+For fetching first row from result use the
+[`fetchrow`](https://aiochclient.readthedocs.io/en/latest/api.html#aiochclient.ChClient.fetchrow)
+method:
 ```python
 row = await client.fetchrow("SELECT * FROM t WHERE a=1")
 
 assert row[0] == 1
 assert row["b"] == (dt.date(2018, 9, 7), None)
 ```
-You can also use `fetchval` method, which returns 
-first value of the first row from query result:
+
+You can also use
+[`fetchval`](https://aiochclient.readthedocs.io/en/latest/api.html#aiochclient.ChClient.fetchval)
+method, which returns first value of the first row from query result:
 ```python
 val = await client.fetchval("SELECT b FROM t WHERE a=2")
 
 assert val == (dt.date(2018, 9, 8), 3.14)
 ```
-With async iteration on query results steam you can fetch 
-multiple rows without loading them all into memory at once:
+
+With async iteration on the query results stream you can fetch multiple
+rows without loading them all into memory at once:
 ```python
 async for row in client.iterate(
     "SELECT number, number*2 FROM system.numbers LIMIT 10000"
@@ -89,14 +108,14 @@ async for row in client.iterate(
     assert row[0] * 2 == row[1]
 ```
 
-Use `fetch`/`fetchrow`/`fetchval`/`iterate` for SELECT queries 
-and `execute` or any of last for INSERT and all another queries.
+Use `fetch`/`fetchrow`/`fetchval`/`iterate` for SELECT queries and `execute` or
+any of last for INSERT and all another queries.
 
 ### Working with query results
-All fetch queries return rows as lightweight, memory 
-efficient objects (**from v`1.0.0`, before it - just tuples**)
-with full mapping interface, where 
-you can get fields by names or by indexes: 
+
+All fetch queries return rows as lightweight, memory efficient objects. _Before
+v`1.0.0` rows were only returned as tuples._ All rows have a full mapping interface, where you can
+get fields by names or indexes:
 ```python
 row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
 
@@ -107,10 +126,16 @@ assert list(row.keys()) == ["a", "b"]
 assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 ```
 
-## Types converting
+## Documentation
 
-`aiochclient` automatically converts values to needed type both 
-from ClickHouse response and for client INSERT queries.
+To check out the [api
+docs](https://aiochclient.readthedocs.io/en/latest/api.html), visit the
+[readthedocs site.](https://aiochclient.readthedocs.io/en/latest/)
+
+## Type Conversion
+
+`aiochclient` automatically converts types from ClickHouse to python types and
+vice-versa.
 
 | ClickHouse type | Python type |
 |:----------------|:------------|
@@ -143,24 +168,18 @@ from ClickHouse response and for client INSERT queries.
 | `Nullable(T)` | `None` or `T` |
 | `LowCardinality(T)` | `T` |
 
-## Connection pool
+## Connection Pool Settings
 
-If you want to change connection pool size, you can use 
-[aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size). 
-Note that by default pool limit is 100 connections.
+`aiochclient` uses the
+[aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size)
+to determine pool size.  By default the pool limit is 100 open connections.
 
-## Speed
+## Notes on Speed
 
-Using of `uvloop` and installing with `aiochclient[speedups]`
-is highly recommended for sake of speed. 
+It's highly recommended to use `uvloop` and install `aiochclient` with
+`aiochclient[speedups]` for the sake of speed. Some recent benchmarks on our
+machines without parallelization:
+- 180k-220k rows/sec on SELECT
+- 50k-80k rows/sec on INSERT
 
-As for the last version of `aiochclient` its speed 
-using one task (without gather or parallel 
-clients and so on) is about 
-**180k-220k rows/sec** on SELECT and about 
-**50k-80k rows/sec** on INSERT queries 
-depending on its environment and ClickHouse settings.
-
-------
-
-Please star️ this repository if this project helped you!
+_Note: these benchmarks are system dependent_
