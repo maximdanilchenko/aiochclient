@@ -335,6 +335,7 @@ CH_TYPES_MAPPING = {
     "Enum16": StrType,
     "Date": DateType,
     "DateTime": DateTimeType,
+    "DateTime64": DateTimeType,
     "Tuple": TupleType,
     "Array": ArrayType,
     "Nullable": NullableType,
