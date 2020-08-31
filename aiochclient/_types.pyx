@@ -16,6 +16,9 @@ from aiochclient.exceptions import ChClientError
 cdef datetime _datetime_parse(str string):
     return datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
 
+cdef datetime _datetime_parse_f(str string):
+    return datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
+
 cdef date _date_parse(str string):
     return datetime.strptime(string, '%Y-%m-%d')
 
@@ -23,10 +26,11 @@ cdef date _date_parse(str string):
 try:
     import ciso8601
 except ImportError:
-    datetime_parse = _datetime_parse
     date_parse = _date_parse
+    datetime_parse = _datetime_parse
+    datetime_parse_f = _datetime_parse_f
 else:
-    datetime_parse = date_parse = ciso8601.parse_datetime
+    date_parse = datetime_parse = datetime_parse_f = ciso8601.parse_datetime
 
 
 __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
@@ -359,6 +363,33 @@ cdef class DateTimeType:
         return self._convert(value.decode())
 
 
+cdef class DateTime64Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cdef object _convert(self, str string):
+        string = string.strip("'")
+        try:
+            return datetime_parse_f(string)
+        except ValueError:
+            # In case of 0000-00-00 00:00:00.000
+            if string == "0000-00-00 00:00:00.000":
+                return None
+            raise
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(value.decode())
+
+
 cdef class TupleType:
 
     cdef:
@@ -566,7 +597,7 @@ cdef dict CH_TYPES_MAPPING = {
     "Enum16": StrType,
     "Date": DateType,
     "DateTime": DateTimeType,
-    "DateTime64": DateTimeType,
+    "DateTime64": DateTime64Type,
     "Tuple": TupleType,
     "Array": ArrayType,
     "Nullable": NullableType,

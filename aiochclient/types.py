@@ -11,14 +11,17 @@ from aiochclient.exceptions import ChClientError
 try:
     import ciso8601
 
-    datetime_parse = date_parse = ciso8601.parse_datetime
+    date_parse = datetime_parse = datetime_parse_f = ciso8601.parse_datetime
 except ImportError:
+
+    def date_parse(string):
+        return dt.datetime.strptime(string, '%Y-%m-%d')
 
     def datetime_parse(string):
         return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
 
-    def date_parse(string):
-        return dt.datetime.strptime(string, '%Y-%m-%d')
+    def datetime_parse_f(string):
+        return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
 
 
 __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
@@ -193,7 +196,22 @@ class DateTimeType(BaseType):
 
     @staticmethod
     def unconvert(value: dt.datetime) -> bytes:
-        return b"%a" % str(value.replace(microsecond=0))
+        return b"%a" % dt.datetime.strftime(value, '%Y-%m-%d %H:%M:%S')
+
+
+class DateTime64Type(BaseType):
+    def p_type(self, string: str):
+        string = string.strip("'")
+        try:
+            return datetime_parse_f(string)
+        except ValueError:
+            # In case of 0000-00-00 00:00:00
+            if string == "0000-00-00 00:00:00.000":
+                return None
+            raise
+
+    def convert(self, value: bytes) -> Optional[dt.datetime]:
+        return self.p_type(value.decode())
 
 
 class UUIDType(BaseType):
@@ -335,7 +353,7 @@ CH_TYPES_MAPPING = {
     "Enum16": StrType,
     "Date": DateType,
     "DateTime": DateTimeType,
-    "DateTime64": DateTimeType,
+    "DateTime64": DateTime64Type,
     "Tuple": TupleType,
     "Array": ArrayType,
     "Nullable": NullableType,
