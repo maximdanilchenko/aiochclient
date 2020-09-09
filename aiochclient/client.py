@@ -161,7 +161,7 @@ class ChClient:
             else:
                 data = rows2ch(*args)
         else:
-            params = self.params
+            params = {**self.params}
             data = query.encode()
 
         if query_id is not None:
