@@ -533,6 +533,17 @@ class TestFetching:
     async def test_select_with_execute(self):
         assert (await self.ch.execute("SELECT * FROM all_types WHERE uint8=1")) is None
 
+    async def test_describe_with_fetch(self):
+        described_columns = await self.ch.fetch("DESCRIBE TABLE all_types", json=True)
+        assert described_columns is not None
+        assert 'type' in described_columns[0]
+        assert 'name' in described_columns[0]
+
+    async def test_show_tables_with_fetch(self):
+        tables = await self.ch.fetch("SHOW TABLES")
+        assert len(tables) == 1
+        assert tables[0]._row.decode() == 'all_types'
+
 
 @pytest.mark.record
 @pytest.mark.usefixtures("class_chclient")
