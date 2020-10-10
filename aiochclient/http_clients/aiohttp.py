@@ -27,13 +27,13 @@ class AiohttpHttpClient(HttpClientABC):
 
             buffer: bytes = b''
             async for chunk in resp.content.iter_any():
-                lines: List[bytes] = chunk.split(line_separator)
+                lines: List[bytes] = chunk.split(self.line_separator)
                 lines[0] = buffer + lines[0]
                 buffer = lines.pop(-1)
                 for line in lines:
-                    yield line + line_separator
+                    yield line + self.line_separator
             if buffer:
-                yield buffer + line_separator
+                yield buffer + self.line_separator
 
     async def post_no_return(self, url: str, params: dict, data: Any) -> None:
         async with self._session.post(url=url, params=params, data=data) as resp:
