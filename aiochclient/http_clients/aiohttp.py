@@ -32,8 +32,7 @@ class AiohttpHttpClient(HttpClientABC):
                 buffer = lines.pop(-1)
                 for line in lines:
                     yield line + self.line_separator
-            if buffer:
-                yield buffer + self.line_separator
+            assert not buffer
 
     async def post_no_return(self, url: str, params: dict, data: Any) -> None:
         async with self._session.post(url=url, params=params, data=data) as resp:
