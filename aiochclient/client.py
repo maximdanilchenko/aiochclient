@@ -113,8 +113,7 @@ class ChClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the session
-        """
+        """Close the session"""
         await self._session.close()
 
     async def is_alive(self) -> bool:
