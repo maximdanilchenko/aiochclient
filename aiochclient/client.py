@@ -4,7 +4,7 @@ from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
 
-from aiohttp import client
+from aiohttp import client, streams
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -21,6 +21,20 @@ class QueryTypes(Enum):
     FETCH = 0
     INSERT = 1
     OTHER = 2
+
+
+async def iter_lines(
+    stream: streams.StreamReader,
+    line_separator: bytes = b'\n',
+) -> AsyncGenerator[bytes, None]:
+    buffer: bytes = b''
+    async for chunk in stream.iter_any():
+        lines: List[bytes] = chunk.split(line_separator)
+        lines[0] = buffer + lines[0]
+        buffer = lines.pop(-1)
+        for line in lines:
+            yield line + line_separator
+    assert not buffer
 
 
 class ChClient:
@@ -171,14 +185,14 @@ class ChClient:
             if need_fetch:
                 if is_json:
                     rf = FromJsonFabric(loads=self._json.loads)
-                    async for line in resp.content:
+                    async for line in iter_lines(resp.content):
                         yield rf.new(line)
                 else:
                     rf = RecordsFabric(
                         names=await resp.content.readline(),
                         tps=await resp.content.readline(),
                     )
-                    async for line in resp.content:
+                    async for line in iter_lines(resp.content):
                         yield rf.new(line)
 
     async def execute(
