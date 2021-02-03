@@ -388,7 +388,10 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
-        return CH_TYPES_MAPPING[name.split("(")[0]](name, container=container)
+        ch_type = name.split("(")[0]
+        if name.startswith('SimpleAggregateFunction'):
+            ch_type = re.findall(',(.*)\)', name)[0].strip()
+        return CH_TYPES_MAPPING[ch_type](name, container=container)
     except KeyError:
         raise ChClientError(f"Unrecognized type name: '{name}'")
 
