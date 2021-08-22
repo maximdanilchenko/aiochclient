@@ -135,7 +135,7 @@ cdef list seq_parser(str raw):
 
 
 cdef class StrType:
-    
+
     cdef:
         str name
         bint container
@@ -148,7 +148,7 @@ cdef class StrType:
         if self.container:
             return string.strip("'")
         return string
-    
+
     cpdef str p_type(self, str string):
         return self._convert(string)
 
@@ -476,7 +476,7 @@ cdef class NothingType:
 
     cpdef void p_type(self, str string):
         pass
-    
+
     cpdef void convert(self, bytes value):
         pass
 
@@ -617,7 +617,11 @@ cdef what_py_type(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
-        return CH_TYPES_MAPPING[name.split("(")[0]](name, container=container)
+        if name.startswith('SimpleAggregateFunction') or name.startswith('AggregateFunction'):
+            ch_type = re.findall(r',(.*)\)', name)[0].strip()
+        else:
+            ch_type = name.split("(")[0]
+        return CH_TYPES_MAPPING[ch_type](name, container=container)
     except KeyError:
         raise ChClientError(f"Unrecognized type name: '{name}'")
 
