@@ -135,7 +135,7 @@ async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS all_types")
     await chclient.execute(
         """
-    CREATE TABLE all_types (uint8 UInt8, 
+    CREATE TABLE all_types (uint8 UInt8,
                             uint16 UInt16,
                             uint32 UInt32,
                             uint64 UInt64,
