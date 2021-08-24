@@ -133,9 +133,11 @@ async def chclient(request, http_client):
 @pytest.fixture
 async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS all_types")
+    await chclient.execute("DROP TABLE IF EXISTS test_cache")
+    await chclient.execute("DROP TABLE IF EXISTS test_cache_mv")
     await chclient.execute(
         """
-    CREATE TABLE all_types (uint8 UInt8, 
+    CREATE TABLE all_types (uint8 UInt8,
                             uint16 UInt16,
                             uint32 UInt32,
                             uint64 UInt64,
@@ -176,6 +178,22 @@ async def all_types_db(chclient, rows):
                             datetime64 DateTime64(3, 'Europe/Moscow')
                             ) ENGINE = Memory
     """
+    )
+    await chclient.execute(
+        """
+        CREATE TABLE test_cache (
+          key           String,
+          int32Cache    AggregateFunction(avg, Int32),
+          float32Cache  SimpleAggregateFunction(sum, Float64))
+        ENGINE = AggregatingMergeTree()
+        ORDER BY key
+        """
+    )
+    await chclient.execute(
+        """
+        CREATE MATERIALIZED VIEW test_cache_mv TO test_cache AS
+          SELECT avgState(int32), sum(float32) FROM all_types
+        """
     )
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
@@ -541,8 +559,13 @@ class TestFetching:
 
     async def test_show_tables_with_fetch(self):
         tables = await self.ch.fetch("SHOW TABLES")
-        assert len(tables) == 1
+        assert len(tables) == 3
         assert tables[0]._row.decode() == 'all_types'
+
+    async def test_aggr_merge_tree(self):
+        avg_value = await self.ch.execute("SELECT avg(int32) FROM all_types")
+        avg_cache = await self.ch.execute("SELECT avgMerge(int32Cache) FROM test_cache")
+        assert avg_value == avg_cache
 
 
 @pytest.mark.record
