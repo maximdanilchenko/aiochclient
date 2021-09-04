@@ -22,7 +22,7 @@ class AiohttpHttpClient(HttpClientABC):
     async def post_return_lines(
         self, url: str, params: dict, data: Any
     ) -> AsyncGenerator[bytes, None]:
-        async with self._session.post(url=url, params=params, content=data) as resp:
+        async with self._session.post(url=url, params=params, data=data) as resp:
             await _check_response(resp)
 
             buffer: bytes = b''
@@ -35,7 +35,7 @@ class AiohttpHttpClient(HttpClientABC):
             assert not buffer
 
     async def post_no_return(self, url: str, params: dict, data: Any) -> None:
-        async with self._session.post(url=url, params=params, content=data) as resp:
+        async with self._session.post(url=url, params=params, data=data) as resp:
             await _check_response(resp)
 
     async def close(self) -> None:
