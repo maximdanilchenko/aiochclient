@@ -3,9 +3,9 @@ from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
 # Optional cython extension:
 try:
-    from aiochclient._types import what_py_converter
+    from aiochclient._types import what_py_converter, empty_convertor
 except ImportError:
-    from aiochclient.types import what_py_converter
+    from aiochclient.types import what_py_converter, empty_convertor
 
 __all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
 
@@ -44,6 +44,9 @@ class Record(Mapping):
 
     def __getitem__(self, key: Union[str, int, slice]) -> Any:
         self._decode()
+        return self._getitem(key)
+
+    def _getitem(self, key: Union[str, int, slice]) -> Any:
         if type(key) == str:
             try:
                 return self._row[self._names[key]]
@@ -79,15 +82,19 @@ class Record(Mapping):
 
 
 class RecordsFabric:
-
     __slots__ = ("converters", "names")
 
-    def __init__(self, tps: bytes, names: bytes):
+    def __init__(self, tps: bytes, names: bytes, convert: bool = True):
         names = names.decode().strip().split("\t")
         self.names = {key: index for (index, key) in enumerate(names)}
-        self.converters = [
-            what_py_converter(tp) for tp in tps.decode().strip().split("\t")
-        ]
+        if convert:
+            self.converters = [
+                what_py_converter(tp) for tp in tps.decode().strip().split("\t")
+            ]
+        else:
+            self.converters = [
+                empty_convertor for _ in tps.decode().strip().split("\t")
+            ]
 
     def new(self, row: bytes) -> Record:
         return Record(

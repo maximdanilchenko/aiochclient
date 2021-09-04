@@ -24,7 +24,7 @@ except ImportError:
         return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
 
 
-__all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
+__all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch", "empty_convertor"]
 
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
@@ -422,3 +422,7 @@ def rows2ch(*rows):
 
 def json2ch(*records, dumps: Callable[[Any], bytes]):
     return dumps(records)[1:-1]
+
+
+def empty_convertor(value: bytes) -> bytes:
+    return value

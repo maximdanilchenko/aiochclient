@@ -137,6 +137,7 @@ class ChClient:
         json: bool = False,
         query_params: Optional[Dict[str, Any]] = None,
         query_id: str = None,
+        decode: bool = True,
     ) -> AsyncGenerator[Record, None]:
         query_params = self._prepare_query_params(query_params)
         query = query.format(**query_params)
@@ -179,6 +180,7 @@ class ChClient:
                 rf = RecordsFabric(
                     names=await response.__anext__(),
                     tps=await response.__anext__(),
+                    convert=decode,
                 )
                 async for line in response:
                     yield rf.new(line)
@@ -236,6 +238,7 @@ class ChClient:
         json: bool = False,
         params: Optional[Dict[str, Any]] = None,
         query_id: str = None,
+        decode: bool = True,
     ) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
@@ -243,6 +246,7 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
 
@@ -255,7 +259,12 @@ class ChClient:
         return [
             row
             async for row in self._execute(
-                query, *args, json=json, query_params=params, query_id=query_id
+                query,
+                *args,
+                json=json,
+                query_params=params,
+                query_id=query_id,
+                decode=decode,
             )
         ]
 
@@ -266,6 +275,7 @@ class ChClient:
         json: bool = False,
         params: Optional[Dict[str, Any]] = None,
         query_id: str = None,
+        decode: bool = True,
     ) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
@@ -273,6 +283,7 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
 
@@ -285,7 +296,12 @@ class ChClient:
         :return: First row from query or None if there no results.
         """
         async for row in self._execute(
-            query, *args, json=json, query_params=params, query_id=query_id
+            query,
+            *args,
+            json=json,
+            query_params=params,
+            query_id=query_id,
+            decode=decode,
         ):
             return row
         return None
@@ -305,6 +321,7 @@ class ChClient:
         json: bool = False,
         params: Optional[Dict[str, Any]] = None,
         query_id: str = None,
+        decode: bool = True,
     ) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
@@ -312,6 +329,7 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
 
@@ -323,7 +341,12 @@ class ChClient:
         :return: First value of the first row or None if there no results.
         """
         async for row in self._execute(
-            query, *args, json=json, query_params=params, query_id=query_id
+            query,
+            *args,
+            json=json,
+            query_params=params,
+            query_id=query_id,
+            decode=decode,
         ):
             if row:
                 return row[0]
@@ -336,6 +359,7 @@ class ChClient:
         json: bool = False,
         params: Optional[Dict[str, Any]] = None,
         query_id: str = None,
+        decode: bool = True,
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
@@ -343,6 +367,7 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
 
@@ -362,7 +387,12 @@ class ChClient:
         :return: Rows one by one.
         """
         async for row in self._execute(
-            query, *args, json=json, query_params=params, query_id=query_id
+            query,
+            *args,
+            json=json,
+            query_params=params,
+            query_id=query_id,
+            decode=decode,
         ):
             yield row
 

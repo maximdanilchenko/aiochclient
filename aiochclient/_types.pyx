@@ -719,3 +719,6 @@ def rows2ch(*rows):
 
 def json2ch(*records, dumps):
     return dumps(records)[1:-1]
+
+def empty_convertor(bytes value):
+    return value
