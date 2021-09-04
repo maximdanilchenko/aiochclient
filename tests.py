@@ -779,6 +779,10 @@ class TestFetching:
         avg_cache = await self.ch.execute("SELECT avgMerge(int32Cache) FROM test_cache")
         assert avg_value == avg_cache
 
+    async def test_exists_table(self):
+        exists = await self.ch.fetchrow("EXISTS TABLE all_types")
+        assert exists == {'result': 1}
+
 
 @pytest.mark.record
 @pytest.mark.usefixtures("class_chclient")

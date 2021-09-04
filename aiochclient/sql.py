@@ -27,11 +27,12 @@ class Where(sqlparse.sql.TokenList):
 sqlparse.sql.Where = Where
 
 KEYWORDS_COMMON['FORMAT'] = tokens.Keyword
+KEYWORDS_COMMON['EXISTS'] = tokens.Keyword.DML
 KEYWORDS_COMMON['DESCRIBE'] = tokens.Keyword.DML
 KEYWORDS_COMMON['SHOW'] = tokens.Keyword.DML
 SQL_REGEX = {
     'clickhouse-ext': [
-        ('FORMAT\b', sqlparse.tokens.Keyword),
+        ('(FORMAT|EXISTS)\b', sqlparse.tokens.Keyword),
         ('(DESCRIBE|SHOW)\b', sqlparse.tokens.Keyword.DML),
     ]
 }
