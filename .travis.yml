@@ -6,6 +6,7 @@ python:
   - 3.6.11
   - 3.7.9
   - 3.8
+  - 3.9
   - nightly
 matrix:
   allow_failures:
