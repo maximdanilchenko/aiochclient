@@ -8,7 +8,7 @@
 
 An async http(s) ClickHouse client for python 3.6+ supporting type
 conversion in both directions, streaming, lazy decoding on select queries, and a
-fully typed interface
+fully typed interface.
 
 ## Table of Contents
 
@@ -20,19 +20,27 @@ fully typed interface
 - [Notes on Speed](#notes-on-speed)
 
 ## Installation
-```
-> pip install aiochclient
-```
-Or to install with extra requirements for speedup:
-```
-> pip install aiochclient[speedups]
-```
+You can use it with either 
+[aiohttp](https://github.com/aio-libs/aiohttp) or 
+[httpx](https://github.com/encode/httpx) http connectors.
 
-Installing with `[speedups]` adds the following:
-- [cChardet](https://pypi.python.org/pypi/cchardet) 
+To use with `aiohttp` install it with command:
+```
+> pip install aiochclient[aiohttp]
+```
+Or `aiochclient[aiohttp-speedups]` to install with extra speedups.
+
+To use with `httpx` install it with command:
+```
+> pip install aiochclient[httpx]
+```
+Or `aiochclient[httpx-speedups]` to install with extra speedups.
+
+Installing with `[*-speedups]` adds the following:
+- [cChardet](https://pypi.python.org/pypi/cchardet) for `aiohttp` speedup
 - [aiodns](https://pypi.python.org/pypi/aiodns) for `aiohttp` speedup
-- [ciso8601](https://github.com/closeio/ciso8601) for ultra fast datetime
-  parsing while decoding data from ClickHouse.
+- [ciso8601](https://github.com/closeio/ciso8601) for ultra-fast datetime 
+  parsing while decoding data from ClickHouse for `aiohttp` and `httpx`.
 
 Additionally the installation process attempts to use Cython for a speed boost
 (roughly 30% faster).
@@ -128,9 +136,8 @@ assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 
 ## Documentation
 
-To check out the [api
-docs](https://aiochclient.readthedocs.io/en/latest/api.html), visit the
-[readthedocs site.](https://aiochclient.readthedocs.io/en/latest/)
+To check out the [api docs](https://aiochclient.readthedocs.io/en/latest/api.html), 
+visit the [readthedocs site.](https://aiochclient.readthedocs.io/en/latest/).
 
 ## Type Conversion
 
@@ -155,6 +162,7 @@ vice-versa.
 | `Enum16` | `str` |
 | `Date` | `datetime.date` |
 | `DateTime` | `datetime.datetime` |
+| `DateTime64` | `datetime.datetime` |
 | `Decimal` | `decimal.Decimal` |
 | `Decimal32` | `decimal.Decimal` |
 | `Decimal64` | `decimal.Decimal` |
@@ -172,12 +180,12 @@ vice-versa.
 
 `aiochclient` uses the
 [aiohttp.TCPConnector](https://docs.aiohttp.org/en/stable/client_advanced.html#limiting-connection-pool-size)
-to determine pool size.  By default the pool limit is 100 open connections.
+to determine pool size.  By default, the pool limit is 100 open connections.
 
 ## Notes on Speed
 
-It's highly recommended to use `uvloop` and install `aiochclient` with
-`aiochclient[speedups]` for the sake of speed. Some recent benchmarks on our
+It's highly recommended using `uvloop` and installing `aiochclient` with
+speedups for the sake of speed. Some recent benchmarks on our
 machines without parallelization:
 - 180k-220k rows/sec on SELECT
 - 50k-80k rows/sec on INSERT
