@@ -637,7 +637,7 @@ class TestTypes:
     async def test_decimal(self):
         assert await self.select_field("decimal") == Decimal("123.56")
 
-        assert await self.select_field_bytes("decimal") == b"123.560"
+        assert await self.select_field_bytes("decimal") == b"123.56"
 
     async def test_decimal32(self):
         assert await self.select_field("decimal32") == Decimal("1234.5678")
@@ -652,7 +652,7 @@ class TestTypes:
     async def test_decimal128(self):
         assert await self.select_field("decimal128") == Decimal("1234.56")
 
-        assert await self.select_field_bytes("decimal128") == b"1234.560000"
+        assert await self.select_field_bytes("decimal128") == b"1234.56"
 
     async def test_array_of_arrays(self):
         assert await self.select_field("array_array_int") == [[1, 2, 3], [1, 2], [6, 7]]
