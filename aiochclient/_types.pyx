@@ -702,7 +702,7 @@ cdef dict PY_TYPES_MAPPING = {
 }
 
 
-cdef bytes py2ch(value):
+cpdef bytes py2ch(value):
     try:
         return PY_TYPES_MAPPING[type(value)](value)
     except KeyError:
