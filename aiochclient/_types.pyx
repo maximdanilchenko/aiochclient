@@ -401,7 +401,7 @@ cdef class TupleType:
         self.name = name
         self.container = container
         cdef str tps = RE_TUPLE.findall(name)[0]
-        self.types = tuple(what_py_type(tp, container=True).p_type for tp in tps.split(","))
+        self.types = tuple(what_py_type(tp.rpartition(" ")[2], container=True).p_type for tp in tps.split(","))
 
     cdef tuple _convert(self, str string):
         return tuple(
