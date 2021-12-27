@@ -257,7 +257,9 @@ class TupleType(BaseType):
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
         tps = RE_TUPLE.findall(name)[0]
-        self.types = tuple(what_py_type(tp, container=True) for tp in tps.split(","))
+        self.types = tuple(
+            what_py_type(tp.rpartition(" ")[2], container=True) for tp in tps.split(",")
+        )
 
     def p_type(self, string: str) -> tuple:
         return tuple(

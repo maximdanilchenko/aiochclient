@@ -686,6 +686,18 @@ class TestTypes:
         assert record[0] == result
         assert record["datetime"] == result
 
+    async def test_named_tuples(self):
+        """Named tuples are used for example in geohash functions
+
+        https://clickhouse.com/docs/en/sql-reference/data-types/tuple/#addressing-tuple-elements
+        """
+
+        result = await self.ch.fetchval(
+            f"SELECT (1.0, 2.0)::Tuple(x Float64, y Float64)"
+        )
+        assert round(result[0]) == 1
+        assert round(result[1]) == 2
+
 
 @pytest.mark.fetching
 @pytest.mark.usefixtures("class_chclient")
