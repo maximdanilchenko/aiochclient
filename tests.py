@@ -795,6 +795,11 @@ class TestFetching:
         exists = await self.ch.fetchrow("EXISTS TABLE all_types")
         assert exists == {'result': 1}
 
+    async def test_no_params(self):
+        """It should be possible to have the aliases we want if we don't use any params"""
+        res = await self.ch.fetchrow('SELECT 1 AS "{not_a_param}" FROM all_types')
+        assert res["{not_a_param}"] == 1
+
 
 @pytest.mark.record
 @pytest.mark.usefixtures("class_chclient")
