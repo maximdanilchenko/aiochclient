@@ -573,7 +573,7 @@ cdef class LowCardinalityType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        self.type = what_py_type(RE_LOW_CARDINALITY.findall(name)[0])
+        self.type = what_py_type(RE_LOW_CARDINALITY.findall(name)[0], container)
 
     cdef _convert(self, str string):
         return self.type.p_type(string)
