@@ -208,7 +208,7 @@ async def all_types_db(chclient, rows):
 def class_chclient(chclient, all_types_db, rows, request):
     request.cls.ch = chclient
     cls_rows = rows
-    cls_rows[1][-1] = dt.datetime(
+    cls_rows[1][39] = dt.datetime(
         2019, 1, 1, 3, 0
     )  # DateTime64 always returns datetime type
     request.cls.rows = [tuple(r) for r in cls_rows]
