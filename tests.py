@@ -63,6 +63,7 @@ def rows(uuid):
             IPv4Address('116.253.40.133'),
             IPv6Address('2001:44c8:129:2632:33:0:252:2'),
             dt.datetime(2018, 9, 21, 10, 32, 23),
+            True,
         ],
         [
             2,
@@ -104,6 +105,7 @@ def rows(uuid):
             None,
             None,
             1546300800000,
+            False,
         ],
     ]
 
@@ -175,7 +177,8 @@ async def all_types_db(chclient, rows):
                             array_array_int Array(Array(Int32)),
                             ipv4 Nullable(IPv4),
                             ipv6 Nullable(IPv6),
-                            datetime64 DateTime64(3, 'Europe/Moscow')
+                            datetime64 DateTime64(3, 'Europe/Moscow'),
+                            bool Bool
                             ) ENGINE = Memory
     """
     )

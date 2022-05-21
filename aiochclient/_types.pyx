@@ -156,6 +156,28 @@ cdef class StrType:
         return self._convert(decode(value))
 
 
+cdef class BoolType:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef bint p_type(self, str string):
+        if string == "true":
+            return True
+        elif string == "false":
+            return False
+        else:
+            raise ValueError("invalid boolean value: {!r}".format(string))
+
+    cpdef bint convert(self, bytes value):
+        return self.p_type(value.decode())
+
+
 cdef class Int8Type:
 
     cdef:
@@ -581,6 +603,7 @@ cdef class DecimalType:
 
 
 cdef dict CH_TYPES_MAPPING = {
+    "Bool": BoolType,
     "UInt8": UInt8Type,
     "UInt16": UInt16Type,
     "UInt32": UInt32Type,
@@ -646,6 +669,12 @@ cdef bytes unconvert_str(str value):
     return PyUnicode_AsEncodedString(PyUnicode_Join("", res), NULL, NULL)
 
 
+cdef bytes unconvert_bool(object value):
+    # We use an integer representation here to be compatible with older
+    # ClickHouse versions that represent booleans as UInt8 values.
+    return b"1" if value else b"0"
+
+
 cdef bytes unconvert_int(object value):
     return b"%d" % value
 
@@ -687,6 +716,7 @@ cdef bytes unconvert_decimal(object value):
 
 
 cdef dict PY_TYPES_MAPPING = {
+    bool: unconvert_bool,
     int: unconvert_int,
     float: unconvert_float,
     str: unconvert_str,

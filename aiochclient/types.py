@@ -142,6 +142,25 @@ class StrType(BaseType):
         return f"'{value}'".encode()
 
 
+class BoolType(BaseType):
+    def p_type(self, string) -> bool:
+        if string == "true":
+            return True
+        elif string == "false":
+            return False
+        else:
+            raise ValueError("invalid boolean value: {!r}".format(string))
+
+    def convert(self, value: bytes) -> bool:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value: bool) -> bytes:
+        # We use an integer representation here to be compatible with older
+        # ClickHouse versions that represent booleans as UInt8 values.
+        return b"1" if value else b"0"
+
+
 class IntType(BaseType):
     p_type = int
 
@@ -339,6 +358,7 @@ class DecimalType(BaseType):
 
 
 CH_TYPES_MAPPING = {
+    "Bool": BoolType,
     "UInt8": IntType,
     "UInt16": IntType,
     "UInt32": IntType,
@@ -371,6 +391,7 @@ CH_TYPES_MAPPING = {
 }
 
 PY_TYPES_MAPPING = {
+    bool: BoolType.unconvert,
     int: IntType.unconvert,
     float: FloatType.unconvert,
     str: StrType.unconvert,
