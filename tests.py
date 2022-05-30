@@ -888,9 +888,15 @@ class TestJson:
         sql = "INSERT INTO all_types FORMAT JSONEachRow"
         records = [
             {"decimal32": 32},
-            {"fixed_string": "simple string", "low_cardinality_str": "meow test"},
         ]
         await self.ch.execute(sql, *records)
+
+        sql = "INSERT INTO all_types"
+        records = [
+            {"fixed_string": "simple string", "low_cardinality_str": "meow test"},
+        ]
+        await self.ch.execute(sql, *records, json=True)
+
         result = await self.ch.fetch(
             "SELECT * FROM all_types WHERE decimal32 = 32 FORMAT JSONEachRow"
         )
