@@ -203,7 +203,7 @@ class ChClient:
         :param str query: Clickhouse query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string on field values.
         :param str query_id: Clickhouse query_id.
 
         Usage:
@@ -219,10 +219,8 @@ class ChClient:
                 (2, (dt.date(2018, 9, 8), 3.14)),
             )
             await client.execute(
-                "INSERT INTO {table_name} VALUES",
-                (1, (dt.date(2018, 9, 7), None)),
-                (2, (dt.date(2018, 9, 8), 3.14)),
-                params={"table_name": "t"}
+                "SELECT * FROM t WHERE a={u8}",
+                params={"u8": 12}
             )
 
         :return: Nothing.
