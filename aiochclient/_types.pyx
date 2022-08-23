@@ -472,7 +472,7 @@ cdef class NullableType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        self.type = what_py_type(RE_NULLABLE.findall(name)[0])
+        self.type = what_py_type(RE_NULLABLE.findall(name)[0], container)
 
     cdef _convert(self, str string):
         if string == r"\N" or string == "NULL":
