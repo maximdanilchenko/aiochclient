@@ -312,9 +312,9 @@ class NullableType(BaseType):
     __slots__ = ("name", "type")
     NULLABLE = {r"\N", "NULL"}
 
-    def __init__(self, name: str, **kwargs):
+    def __init__(self, name: str, container: bool = False, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(RE_NULLABLE.findall(name)[0])
+        self.type = what_py_type(RE_NULLABLE.findall(name)[0], container=container)
 
     def p_type(self, string: str) -> Any:
         if string in self.NULLABLE:

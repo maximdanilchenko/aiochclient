@@ -42,6 +42,7 @@ def rows(uuid):
             0,
             ["hello", "world"],
             ["hello", "world"],
+            ["hello", None],
             "'\b\f\r\n\t\\",
             uuid,
             [uuid, uuid, uuid],
@@ -86,6 +87,7 @@ def rows(uuid):
             [1, 2, 3, 4],
             (4, "hello"),
             None,
+            [],
             [],
             [],
             "'\b\f\r\n\t\\",
@@ -162,6 +164,7 @@ async def all_types_db(chclient, rows):
                             nullable Nullable(Int8),
                             array_string Array(String),
                             array_low_cardinality_string Array(LowCardinality(String)),
+                            array_nullable_string Array(Nullable(String)),
                             escape_string String,
                             uuid Nullable(UUID),
                             array_uuid Array(UUID),
@@ -208,7 +211,7 @@ async def all_types_db(chclient, rows):
 def class_chclient(chclient, all_types_db, rows, request):
     request.cls.ch = chclient
     cls_rows = rows
-    cls_rows[1][39] = dt.datetime(
+    cls_rows[1][40] = dt.datetime(
         2019, 1, 1, 3, 0
     )  # DateTime64 always returns datetime type
     request.cls.rows = [tuple(r) for r in cls_rows]
@@ -520,6 +523,19 @@ class TestTypes:
         record = await self.select_record_bytes("array_low_cardinality_string")
         assert record[0] == result
         assert record["array_low_cardinality_string"] == result
+
+    async def test_array_nullable_string(self):
+        result = ["hello", None]
+        assert await self.select_field("array_nullable_string") == result
+        record = await self.select_record("array_nullable_string")
+        assert record[0] == result
+        assert record["array_nullable_string"] == result
+
+        result = b"['hello',NULL]"
+        assert await self.select_field_bytes("array_nullable_string") == result
+        record = await self.select_record_bytes("array_nullable_string")
+        assert record[0] == result
+        assert record["array_nullable_string"] == result
 
     async def test_escape_string(self):
         result = "'\b\f\r\n\t\\"
