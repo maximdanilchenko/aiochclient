@@ -24,11 +24,12 @@ except ImportError:
         return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
 
 
-__all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch", "empty_convertor"]
+__all__ = ["what_py_converter", "rows2ch", "list2ch", "json2ch", "py2ch", "empty_convertor"]
 
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_FixedARRAY = re.compile(r"^FixedArray\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 
@@ -297,7 +298,12 @@ class ArrayType(BaseType):
 
     def __init__(self, name: str, **kwargs):
         super().__init__(name, **kwargs)
-        self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
+        if len(RE_ARRAY.findall(name)) != 0:
+            self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
+        else:
+            self.type = what_py_type(
+                RE_FixedARRAY.findall(name)[0].split(',')[0], container=True
+            )
 
     def p_type(self, string: str) -> list:
         return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
@@ -380,6 +386,7 @@ CH_TYPES_MAPPING = {
     "DateTime64": DateTime64Type,
     "Tuple": TupleType,
     "Array": ArrayType,
+    "FixedArray": ArrayType,
     "Nullable": NullableType,
     "Nothing": NothingType,
     "UUID": UUIDType,
@@ -442,6 +449,10 @@ def py2ch(value):
 
 
 def rows2ch(*rows):
+    return b",".join(TupleType.unconvert(row) for row in rows)
+
+
+def list2ch(rows):
     return b",".join(TupleType.unconvert(row) for row in rows)
 
 

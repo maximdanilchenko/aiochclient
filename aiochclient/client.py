@@ -1,13 +1,20 @@
+import csv
 import json as json_
+import sys
 import warnings
 from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
+import aiohttp
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
 from aiochclient.sql import sqlparse
+
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 # Optional cython extension:
 try:
@@ -57,7 +64,7 @@ class ChClient:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
-    __slots__ = ("_session", "url", "params", "_json", "_http_client")
+    __slots__ = ("_session", "url", "params", "_json", "_http_client", "stream_batch_size")
 
     def __init__(
         self,
@@ -67,6 +74,7 @@ class ChClient:
         password: str = None,
         database: str = "default",
         compress_response: bool = False,
+        stream_batch_size: int = 1000000,
         json=json_,  # type: ignore
         **settings,
     ):
@@ -84,6 +92,8 @@ class ChClient:
             self.params["enable_http_compression"] = 1
         self._json = json
         self.params.update(settings)
+        self.stream_batch_size = stream_batch_size
+        logging.info("finished init")
 
     async def __aenter__(self) -> 'ChClient':
         return self
@@ -142,7 +152,7 @@ class ChClient:
         query_params = self._prepare_query_params(query_params)
         if query_params:
             query = query.format(**query_params)
-        need_fetch, is_json, statement_type = self._parse_squery(query)
+        need_fetch, is_json, is_csv, statement_type = self._parse_squery(query)
 
         if not is_json and json:
             query += " FORMAT JSONEachRow"
@@ -160,8 +170,16 @@ class ChClient:
 
             if is_json:
                 data = json2ch(*args, dumps=self._json.dumps)
+            elif is_csv:
+                # we'll fill the data incrementally from file
+                if len(args) > 1:
+                    raise ChClientError(
+                        "only one argument is accepted in file read mode"
+                    )
+                data = []
             else:
                 data = rows2ch(*args)
+                logging.info(f"rows2ch: {data}")
         else:
             params = {**self.params}
             data = query.encode()
@@ -169,7 +187,38 @@ class ChClient:
         if query_id is not None:
             params["query_id"] = query_id
 
-        if need_fetch:
+        if is_csv:
+            sent = False
+            rows_read = 0
+            retry = 0
+            max_batch_size = self.stream_batch_size
+            csvfile = open(args[0], newline='')
+            while True:
+                rows = "".join(csvfile.readlines(max_batch_size))
+                if len(rows) == 0:
+                    csvfile.close()
+                    break
+                rows_read += max_batch_size
+                while not sent:
+                    if retry >= 3:
+                        logging.error("pipe breaks too many time, existing")
+                        sys.exit(1)
+                    try:
+                        await self._http_client.post_no_return(
+                            url=self.url, params=params, data=rows
+                        )
+                        logging.info(f"{rows_read} lines inserted")
+                        sent = True
+                    except aiohttp.ClientOSError as e:
+                        if e.errno == 32:
+                            logging.warning("broken pipe, retrying")
+                            retry += 1
+                        else:
+                            raise e
+                retry = 0
+                sent = False
+
+        elif need_fetch:
             response = self._http_client.post_return_lines(
                 url=self.url, params=params, data=data
             )
@@ -203,7 +252,7 @@ class ChClient:
         :param str query: Clickhouse query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[Dict[str, Any]] params: Params to escape inside query string on field values.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
 
         Usage:
@@ -423,4 +472,17 @@ class ChClient:
             )
         else:
             is_json = False
-        return need_fetch, is_json, statement_type
+
+        # TODO FORMAT 可以整理到一起
+        fmt2 = statement.token_matching(
+            (lambda tk: tk.match(sqlparse.tokens.Keyword, 'FORMAT'),), 0
+        )
+        if fmt2:
+            is_csv = statement.token_matching(
+                (lambda tk: tk.match(None, ['CSV']),),
+                statement.token_index(fmt2) + 1,
+            )
+        else:
+            is_csv = False
+
+        return need_fetch, is_json, is_csv, statement_type

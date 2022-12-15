@@ -17,6 +17,8 @@ extensions = [Extension("aiochclient._types", ["aiochclient/_types" + ext])]
 if USE_CYTHON:
     extensions = cythonize(extensions, compiler_directives={'language_level': 3})
 
+print("USE_CYTHON {} \next {} \nextensions {}".format(USE_CYTHON, ext, extensions))
+
 
 class BuildFailed(Exception):
     pass
