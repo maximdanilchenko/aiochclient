@@ -7,7 +7,7 @@ import aiohttp
 import httpx
 import pytest
 
-from aiochclient import ChClient, ChClientError
+from aiochclient import AsyncClient, ChClientError
 
 pytestmark = pytest.mark.asyncio
 
@@ -132,7 +132,7 @@ def http_client(request):
     ]
 )
 async def chclient(request, http_client):
-    async with ChClient(http_client(), **request.param) as chclient:
+    async with AsyncClient(http_client(), **request.param) as chclient:
         yield chclient
 
 

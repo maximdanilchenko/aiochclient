@@ -2,12 +2,12 @@ import asyncio
 
 from aiohttp import ClientSession
 
-from aiochclient import ChClient
+from aiochclient import AsyncClient
 
 
 async def main():
     async with ClientSession() as s:
-        client = ChClient(s, url="http://localhost:8123")
+        client = AsyncClient(s, url="http://localhost:8123")
         assert await client.is_alive()
 
 

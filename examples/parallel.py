@@ -2,10 +2,10 @@ import asyncio
 
 from aiohttp import ClientSession
 
-from aiochclient import ChClient
+from aiochclient import AsyncClient
 
 
-async def some_query(client: ChClient, offset, limit):
+async def some_query(client: AsyncClient, offset, limit):
     await client.execute(
         "INSERT INTO t VALUES", *((i, i / 2) for i in range(offset, offset + limit))
     )
@@ -13,7 +13,7 @@ async def some_query(client: ChClient, offset, limit):
 
 async def main():
     async with ClientSession() as s:
-        client = ChClient(s, url="http://localhost:8123")
+        client = AsyncClient(s, url="http://localhost:8123")
         # preparing database
         await client.execute("CREATE TABLE t (a UInt8, b Float32) ENGINE = Memory")
         # making queries in parallel

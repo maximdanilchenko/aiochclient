@@ -52,14 +52,14 @@ Additionally the installation process attempts to use Cython for a speed boost
 `aiochclient` needs `aiohttp.ClientSession` or `httpx.AsyncClient` to connect to ClickHouse:
 
 ```python
-from aiochclient import ChClient
+from aiochclient import AsyncClient
 from aiohttp import ClientSession
 
 
 async def main():
-    async with ClientSession() as s:
-        client = ChClient(s)
-        assert await client.is_alive()  # returns True if connection is Ok
+  async with ClientSession() as s:
+    client = AsyncClient(s)
+    assert await client.is_alive()  # returns True if connection is Ok
 
 ```
 

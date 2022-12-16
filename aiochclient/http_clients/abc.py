@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.common.exceptions import ChClientError
 
 
 class HttpClientABC(ABC):

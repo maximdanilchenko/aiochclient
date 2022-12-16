@@ -1,6 +1,6 @@
 from aiohttp import ClientSession, web
 
-from aiochclient import ChClient
+from aiochclient import AsyncClient
 
 ###
 # Signals to init and close http connections pool
@@ -9,7 +9,7 @@ from aiochclient import ChClient
 
 async def init_ch_client(app: web.Application):
     app['http_session'] = ClientSession()
-    app['ch'] = ChClient(app['http_session'], **app['config']['clickhouse'])
+    app['ch'] = AsyncClient(app['http_session'], **app['config']['clickhouse'])
 
 
 async def close_ch_client(app: web.Application):
@@ -22,7 +22,7 @@ async def close_ch_client(app: web.Application):
 
 
 async def handler(request: web.Request) -> web.Response:
-    ch: ChClient = request.app['ch']
+    ch: AsyncClient = request.app['ch']
     is_alive = await ch.is_alive()
     return web.json_response({'is_alive': is_alive})
 

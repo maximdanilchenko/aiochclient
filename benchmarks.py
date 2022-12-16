@@ -47,7 +47,7 @@ import uvloop
 from aioch import Client
 from aiohttp import ClientSession
 
-from aiochclient import ChClient
+from aiochclient import AsyncClient
 
 
 def row_data():
@@ -96,7 +96,7 @@ async def insert_rows(client, test_data, number):
 async def bench_selects(*, retries: int, rows: int):
     print("AIOCHCLIENT selects")
     async with ClientSession() as s:
-        client = ChClient(s)
+        client = AsyncClient(s)
         # prepare environment
         await prepare_db(client)
         await insert_rows(client, row_data(), rows)
@@ -116,7 +116,7 @@ async def bench_selects(*, retries: int, rows: int):
 async def bench_selects_with_decoding(*, retries: int, rows: int):
     print("AIOCHCLIENT selects with decoding")
     async with ClientSession() as s:
-        client = ChClient(s, compress_response=True)
+        client = AsyncClient(s, compress_response=True)
         # prepare environment
         await prepare_db(client)
         await insert_rows(client, row_data(), rows)
@@ -138,7 +138,7 @@ async def bench_selects_with_decoding(*, retries: int, rows: int):
 async def bench_inserts(*, retries: int, rows: int):
     print("AIOCHCLIENT inserts")
     async with ClientSession() as s:
-        client = ChClient(s, compress_response=True)
+        client = AsyncClient(s, compress_response=True)
         # prepare environment
         await prepare_db(client)
         # actual testing

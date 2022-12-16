@@ -10,7 +10,7 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
                           uint8_t, uint16_t, uint32_t, uint64_t)
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.common.exceptions import ChClientError
 
 
 cdef datetime _datetime_parse(str string):

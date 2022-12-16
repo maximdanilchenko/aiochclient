@@ -2,7 +2,7 @@ from typing import Any, AsyncGenerator, Optional
 
 from httpx import AsyncClient, Response
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.common.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 
 

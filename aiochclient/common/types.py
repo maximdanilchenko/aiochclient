@@ -6,7 +6,7 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.common.exceptions import ChClientError
 
 try:
     import ciso8601
