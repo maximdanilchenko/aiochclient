@@ -6,16 +6,16 @@ from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type, Callable
 
-from aiochclient.common.exceptions import ChClientError
-from aiochclient.http_clients.abc import HttpClientABC
-from aiochclient.common.records import FromJsonFabric, Record, RecordsFabric
-from aiochclient.common.sql import sqlparse
+from myscaledb.common.exceptions import ClientError
+from myscaledb.http_clients.abc import HttpClientABC
+from myscaledb.common.records import FromJsonFabric, Record, RecordsFabric
+from myscaledb.common.sql import sqlparse
 
 # Optional cython extension:
 try:
-    from aiochclient.common._types import rows2ch, json2ch, py2ch
+    from myscaledb.common._types import rows2ch, json2ch, py2ch
 except ImportError:
-    from aiochclient.common.types import rows2ch, json2ch, py2ch
+    from myscaledb.common.types import rows2ch, json2ch, py2ch
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -79,7 +79,7 @@ class BaseClient:
             await self._http_client.get(
                 url=self.url, params={**self.params, "query": "SELECT 1"}
             )
-        except ChClientError:
+        except ClientError:
             return False
         return True
 
@@ -158,7 +158,7 @@ class BaseClient:
 
         if args:
             if statement_type != 'INSERT':
-                raise ChClientError(
+                raise ClientError(
                     "It is possible to pass arguments only for INSERT queries"
                 )
             params = {**self.params, "query": query}
@@ -168,7 +168,7 @@ class BaseClient:
             elif is_csv:
                 # we'll fill the data incrementally from file
                 if len(args) > 1:
-                    raise ChClientError(
+                    raise ClientError(
                         "only one argument is accepted in file read mode"
                     )
                 data = []
@@ -238,6 +238,51 @@ class BaseClient:
 
 
 class AsyncClient(BaseClient):
+    """AsyncClient connection class.
+
+       Usage:
+
+       .. code-block:: python
+
+           import asyncio
+           from myscaledb import AsyncClient
+           from aiohttp import ClientSession
+
+           async def main():
+               async with ClientSession() as s:
+                   async with AsyncClient(s) as client:
+                   alive = await client.is_alive()
+                   print(f"Is Myscale alive? -> {alive}")
+                   res = await client.fetch(query="select id,name from default.test_table")
+                   for line in res:
+                       print(f"{line[0]}---{line[1]}")
+
+           if __name__ == '__main__':
+               asyncio.run(main())
+
+    :param aiohttp.ClientSession session:
+        aiohttp client session. Please, use one session
+        and one AsyncClient for all connections in your app.
+
+    :param str url:
+        Myscale server url. Need full path, like "http://localhost:8123/".
+
+    :param str user:
+        User name for authorization.
+
+    :param str password:
+        Password for authorization.
+
+    :param str database:
+        Database name.
+
+    :param bool compress_response:
+        Pass True if you want Myscale to compress its responses with gzip.
+        They will be decompressed automatically. But overall it will be slightly slower.
+
+    :param **settings:
+        Any settings from https://clickhouse.yandex/docs/en/operations/settings
+    """
     async def __aenter__(self) -> 'AsyncClient':
         return self
 
@@ -266,11 +311,11 @@ class AsyncClient(BaseClient):
     ) -> None:
         """Execute query. Returns None.
 
-        :param str query: Clickhouse query string.
+        :param str query: Myscale query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Clickhouse query_id.
+        :param str query_id: Myscale query_id.
 
         Usage:
 
@@ -305,6 +350,22 @@ class AsyncClient(BaseClient):
             query_id: str = None,
             decode: bool = True,
     ) -> List[Record]:
+        """Execute query and fetch all rows from query result at once in a list.
+
+        :param query: Myscale query string.
+        :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+        :param str query_id: Myscale query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
+
+        Usage:
+
+        .. code-block:: python
+
+            all_rows = await client.fetch("SELECT * FROM t")
+
+        :return: All rows from query.
+        """
         return [
             row
             async for row in self._execute(
@@ -326,6 +387,24 @@ class AsyncClient(BaseClient):
             query_id: str = None,
             decode: bool = True,
     ) -> Optional[Record]:
+        """Execute query and fetch first row from query result or None.
+
+        :param query: Myscale query string.
+        :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+        :param str query_id: Myscale query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
+
+        Usage:
+
+        .. code-block:: python
+
+            row = await client.fetchrow("SELECT * FROM t WHERE a=1")
+            assert row[0] == 1
+            assert row["b"] == (dt.date(2018, 9, 7), None)
+
+        :return: First row from query or None if there no results.
+        """
         async for row in self._execute(
                 query,
                 *args,
@@ -346,6 +425,23 @@ class AsyncClient(BaseClient):
             query_id: str = None,
             decode: bool = True,
     ) -> Any:
+        """Execute query and fetch first value of the first row from query result or None.
+
+        :param query: Myscale query string.
+        :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+        :param str query_id: Myscale query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
+
+        Usage:
+
+        .. code-block:: python
+
+            val = await client.fetchval("SELECT b FROM t WHERE a=2")
+            assert val == (dt.date(2018, 9, 8), 3.14)
+
+        :return: First value of the first row or None if there no results.
+        """
         async for row in self._execute(
                 query,
                 *args,
@@ -367,6 +463,31 @@ class AsyncClient(BaseClient):
             query_id: str = None,
             decode: bool = True,
     ) -> AsyncGenerator[Record, None]:
+        """Async generator by all rows from query result.
+
+        :param str query: Myscale query string.
+        :param bool json: Execute query in JSONEachRow mode.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+        :param str query_id: Myscale query_id.
+        :param decode: Decode to python types. If False, returns bytes for each field instead.
+
+        Usage:
+
+        .. code-block:: python
+
+            async for row in client.iterate(
+                "SELECT number, number*2 FROM system.numbers LIMIT 10000"
+            ):
+                assert row[0] * 2 == row[1]
+
+            async for row in client.iterate(
+                "SELECT number, number*2 FROM system.numbers LIMIT {numbers_limit}",
+                params={"numbers_limit": 10000}
+            ):
+                assert row[0] * 2 == row[1]
+
+        :return: Rows one by one.
+        """
         async for row in self._execute(
                 query,
                 *args,

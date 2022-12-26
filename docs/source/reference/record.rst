@@ -1,6 +1,6 @@
-aiochclient.Record
+myscaledb.Record
 ==================
 
-.. automodule:: aiochclient
+.. automodule:: myscaledb
    :members: Record
    :noindex:

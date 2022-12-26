@@ -1,4 +1,4 @@
-class ChClientError(Exception):
+class ClientError(Exception):
     """Raised when:
 
     - type from user or from Clickhouse is unrecognized;

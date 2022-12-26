@@ -2,8 +2,8 @@ from typing import Any, AsyncGenerator, Optional
 
 from httpx import AsyncClient, Response
 
-from aiochclient.common.exceptions import ChClientError
-from aiochclient.http_clients.abc import HttpClientABC
+from myscaledb.common.exceptions import ClientError
+from myscaledb.http_clients.abc import HttpClientABC
 
 
 class HttpxHttpClient(HttpClientABC):
@@ -35,7 +35,7 @@ class HttpxHttpClient(HttpClientABC):
 
 async def _check_response(resp):
     if resp.status_code != 200:
-        raise ChClientError(await _read_error_body(resp))
+        raise ClientError(await _read_error_body(resp))
 
 
 async def _read_error_body(resp: Response):

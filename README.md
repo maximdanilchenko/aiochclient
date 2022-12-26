@@ -52,7 +52,7 @@ Additionally the installation process attempts to use Cython for a speed boost
 `aiochclient` needs `aiohttp.ClientSession` or `httpx.AsyncClient` to connect to ClickHouse:
 
 ```python
-from aiochclient import AsyncClient
+from myscaledb import AsyncClient
 from aiohttp import ClientSession
 
 

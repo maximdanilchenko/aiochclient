@@ -12,7 +12,7 @@ except ImportError:
 
 ext = '.pyx' if USE_CYTHON else '.c'
 
-extensions = [Extension("aiochclient._types", ["aiochclient/_types" + ext])]
+extensions = [Extension("myscaledb._types", ["myscaledb/_types" + ext])]
 
 if USE_CYTHON:
     extensions = cythonize(extensions, compiler_directives={'language_level': 3})
@@ -49,7 +49,7 @@ def read(fname):
 
 
 setup_opts = dict(
-    name='aiochclient',
+    name='myscaledb',
     version='2.2.0',
     description='Async http clickhouse client for python 3.6+',
     long_description=read('README.md'),
@@ -57,7 +57,7 @@ setup_opts = dict(
     author='Danilchenko Maksim',
     author_email='dmax.dev@gmail.com',
     packages=find_packages(exclude=('test*',)),
-    package_dir={'aiochclient': 'aiochclient'},
+    package_dir={'myscaledb': 'myscaledb'},
     include_package_data=True,
     install_requires=['sqlparse>=0.3.0'],
     license='MIT',

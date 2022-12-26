@@ -3,16 +3,16 @@ from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
 # Optional cython extension:
 try:
-    from aiochclient.common._types import what_py_converter, empty_convertor
+    from myscaledb.common._types import what_py_converter, empty_convertor
 except ImportError:
-    from aiochclient.common.types import what_py_converter, empty_convertor
+    from myscaledb.common.types import what_py_converter, empty_convertor
 
 __all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
 
 
 class Record(Mapping):
     """Lightweight, memory efficient objects with full mapping interface, where
-    you can get fields by names or by indexes.
+    you can get fields by names or by indexes..
 
     Usage:
 

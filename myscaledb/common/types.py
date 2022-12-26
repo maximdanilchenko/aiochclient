@@ -6,7 +6,7 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import Any, Callable, Generator, Optional
 from uuid import UUID
 
-from aiochclient.common.exceptions import ChClientError
+from myscaledb.common.exceptions import ClientError
 
 try:
     import ciso8601
@@ -428,7 +428,7 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
             ch_type = name.split("(")[0]
         return CH_TYPES_MAPPING[ch_type](name, container=container)
     except KeyError:
-        raise ChClientError(f"Unrecognized type name: '{name}'")
+        raise ClientError(f"Unrecognized type name: '{name}'")
 
 
 def what_py_converter(name: str, container: bool = False) -> Callable:
@@ -440,7 +440,7 @@ def py2ch(value):
     try:
         return PY_TYPES_MAPPING[type(value)](value)
     except KeyError:
-        raise ChClientError(
+        raise ClientError(
             f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
             f"int, float, str, dt.date, dt.datetime, tuple, list, uuid.UUID (or None). "

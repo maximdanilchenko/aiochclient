@@ -2,7 +2,7 @@ import asyncio
 
 from aiohttp import ClientSession
 
-from aiochclient import AsyncClient
+from myscaledb import AsyncClient
 
 
 async def main():

@@ -1,5 +1,5 @@
 """
-This module is used for testing speed of aiochclient after
+This module is used for testing speed of myscaledb after
 any changes in its code. It is useful for comparing its
 results with older versions speed. Results mostly depends
 on the part which makes serialize and deserialize work.
@@ -47,7 +47,7 @@ import uvloop
 from aioch import Client
 from aiohttp import ClientSession
 
-from aiochclient import AsyncClient
+from myscaledb import AsyncClient
 
 
 def row_data():

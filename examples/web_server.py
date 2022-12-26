@@ -1,6 +1,6 @@
 from aiohttp import ClientSession, web
 
-from aiochclient import AsyncClient
+from myscaledb import AsyncClient
 
 ###
 # Signals to init and close http connections pool

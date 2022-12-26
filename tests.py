@@ -7,7 +7,7 @@ import aiohttp
 import httpx
 import pytest
 
-from aiochclient import AsyncClient, ChClientError
+from myscaledb import AsyncClient, ClientError
 
 pytestmark = pytest.mark.asyncio
 
@@ -224,11 +224,11 @@ class TestClient:
         assert await self.ch.is_alive() is True
 
     async def test_bad_query(self):
-        with pytest.raises(ChClientError):
+        with pytest.raises(ClientError):
             await self.ch.execute("SELE")
 
     async def test_bad_select(self):
-        with pytest.raises(ChClientError):
+        with pytest.raises(ClientError):
             await self.ch.execute("SELECT * FROM all_types WHERE", 1, 2, 3, 4)
 
 
