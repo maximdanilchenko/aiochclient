@@ -7,7 +7,8 @@ from typing import Any, Optional, Type, Dict, List, Iterator
 from myscaledb.async_db.client import BaseClient as AsyncChClient
 from myscaledb.common.exceptions import ClientError
 from myscaledb.common.records import Record
-
+import nest_asyncio
+nest_asyncio.apply()
 
 def iterate_async_to_sync(async_iterate, loop):
 

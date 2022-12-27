@@ -2,6 +2,7 @@ include LICENSE
 include README.md
 include requirements.txt
 graft aiochclient
+graft myscaledb
 graft docs
 graft tests.py
 global-exclude *.pyc

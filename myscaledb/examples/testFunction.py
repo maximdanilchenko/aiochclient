@@ -33,15 +33,26 @@ def sync_client_test():
     row=sync_client.fetchrow(query=single_search_query)
     print(f"{row[0]} {row[1]}")
 
+import asyncio
+from myscaledb import AsyncClient
+from aiohttp import ClientSession
+
+async def main():
+    async with ClientSession() as s:
+        async with AsyncClient(s,url="http://10.10.1.100:8123/") as client:
+            alive = await client.is_alive()
+            print(f"Is Myscale alive? -> {alive}")
 
 if __name__ == '__main__':
     print("\n\nasync test\n\n")
     # loop = asyncio.get_event_loop()
     # loop.run_until_complete(async_client_test())
-    asyncio.run(async_client_test())
-    asyncio.run(async_client_test())
+    # asyncio.run(async_client_test())
+    # asyncio.run(async_client_test())
 
     # print("\n\nsync test\n\n")
-    sync_client_test()
+    # sync_client_test()
+
+    asyncio.run(main())
 
 

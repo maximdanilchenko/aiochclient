@@ -12,7 +12,7 @@ except ImportError:
 
 ext = '.pyx' if USE_CYTHON else '.c'
 
-extensions = [Extension("myscaledb._types", ["myscaledb/_types" + ext])]
+extensions = [Extension("myscaledb.common._types", ["myscaledb/common/_types" + ext])]
 
 if USE_CYTHON:
     extensions = cythonize(extensions, compiler_directives={'language_level': 3})
