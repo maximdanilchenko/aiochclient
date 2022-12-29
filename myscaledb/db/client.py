@@ -53,7 +53,7 @@ def async_to_sync():
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 loop.set_exception_handler(handle_exception)
-                logging.info(loop)
+                # logging.info(loop)
                 return loop.run_until_complete(func_wrapped)
             return func_wrapped
 
