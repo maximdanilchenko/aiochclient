@@ -45,6 +45,7 @@ DEF ARR_CLS = ']'
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_FixedARRAY = re.compile(r"^FixedArray\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 
@@ -448,9 +449,10 @@ cdef class ArrayType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
-        self.type = what_py_type(
-            RE_ARRAY.findall(name)[0], container=True
-        )
+        if len(RE_ARRAY.findall(name)) != 0:
+            self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
+        else:
+            self.type = what_py_type(RE_FixedARRAY.findall(name)[0].split(',')[0], container=True)
 
     cdef list _convert(self, str string):
         return [self.type.p_type(val) for val in seq_parser(string[1:-1])]
@@ -623,6 +625,7 @@ cdef dict CH_TYPES_MAPPING = {
     "DateTime64": DateTime64Type,
     "Tuple": TupleType,
     "Array": ArrayType,
+    "FixedArray": ArrayType,
     "Nullable": NullableType,
     "Nothing": NothingType,
     "UUID": UUIDType,
