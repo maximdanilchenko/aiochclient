@@ -59,7 +59,12 @@ setup_opts = dict(
     packages=find_packages(exclude=('test*',)),
     package_dir={'myscaledb': 'myscaledb'},
     include_package_data=True,
-    install_requires=['sqlparse>=0.3.0'],
+    install_requires=[
+        'sqlparse>=0.3.0',
+        'aiodns>=3.0.0',
+        'aiohttp>=3.0.1',
+    ],
+
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
