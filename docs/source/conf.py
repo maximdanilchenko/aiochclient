@@ -7,9 +7,9 @@ sys.path.insert(0, os.path.abspath("../.."))
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.intersphinx", "sphinx.ext.viewcode"]
 
 project = "myscaledb"
-author = "Maksim Danilchenko"
-copyright = "Maksim Danilchenko and contributors {0:%Y}".format(dt.datetime.utcnow())
-version = "0.0.1"
+author = "MochiXu"
+copyright = "MochiXu and contributors {0:%Y}".format(dt.datetime.utcnow())
+version = "2.0"
 source_suffix = ".rst"
 master_doc = "index"
 pygments_style = "default"

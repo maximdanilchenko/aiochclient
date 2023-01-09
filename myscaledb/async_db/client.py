@@ -58,7 +58,6 @@ class BaseClient:
         self._json = json
         self.params.update(settings)
         self.stream_batch_size = stream_batch_size
-        # logging.info("finished init")
 
     async def _aclose(self) -> None:
         """Close the session"""
@@ -86,7 +85,6 @@ class BaseClient:
     @staticmethod
     def _prepare_query_params(params: Optional[Dict[str, Any]] = None):
         if params is None:
-            # logging.info("_prepare_query_params params is none")
             return {}
         if not isinstance(params, dict):
             logging.error("Query params must be a Dict[str, Any]")
@@ -94,7 +92,6 @@ class BaseClient:
         prepared_query_params = {}
         for key, value in params.items():
             prepared_query_params[key] = py2ch(value).decode('utf-8')
-        # logging.info(f"prepared_query_params {prepared_query_params}")
         return prepared_query_params
 
     @staticmethod
@@ -117,7 +114,6 @@ class BaseClient:
         else:
             is_json = False
 
-        # TODO FORMAT 可以整理到一起
         fmt2 = statement.token_matching(
             (lambda tk: tk.match(sqlparse.tokens.Keyword, 'FORMAT'),), 0
         )
@@ -129,8 +125,6 @@ class BaseClient:
         else:
             is_csv = False
 
-        # logging.info(
-        #     f"_parse_squery need_fetch:{need_fetch} is_json:{is_json} is_csv:{is_csv} statement_type:{statement_type}")
         return need_fetch, is_json, is_csv, statement_type
 
     async def _execute(
@@ -147,8 +141,6 @@ class BaseClient:
             query = query.format(**query_params)
         need_fetch, is_json, is_csv, statement_type = self._parse_squery(query)
 
-        # logging.info(
-        #     f"_execute need_fetch:{need_fetch}, is_json:{is_json}, is_csv:{is_csv}, statement_type:{statement_type}")
         if not is_json and json:
             query += " FORMAT JSONEachRow"
             is_json = True
@@ -174,11 +166,8 @@ class BaseClient:
                 data = []
             elif isinstance(args[0], list):
                 data = list2ch(args[0])
-                # logging.info(f"enter base - client args {data}")
             else:
                 data = rows2ch(*args)
-                # logging.info(f"enter base client args {data}")
-                # logging.info(f"rows2ch: {data}")
         else:
             params = {**self.params}
             data = query.encode()
@@ -206,7 +195,6 @@ class BaseClient:
                         await self._http_client.post_no_return(
                             url=self.url, params=params, data=rows
                         )
-                        # logging.info(f"{rows_read} lines inserted")
                         sent = True
                     except aiohttp.ClientOSError as e:
                         if e.errno == 32:
@@ -237,8 +225,6 @@ class BaseClient:
             await self._http_client.post_no_return(
                 url=self.url, params=params, data=data
             )
-
-        # logging.info(f"_execute params:{params} data:{data}")
 
 
 class AsyncClient(BaseClient):
