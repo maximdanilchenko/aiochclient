@@ -73,7 +73,7 @@ class Client(AsyncChClient):
            def main():
                client = Client()
                alive = client.is_alive()
-               print(f"Is Myscale alive? -> {alive}")
+               print(f"Is MyScale alive? -> {alive}")
 
            if __name__ == '__main__':
                main()
@@ -83,7 +83,7 @@ class Client(AsyncChClient):
         and one Client for all connections in your app.
 
     :param str url:
-        Myscale server url. Need full path, like "http://localhost:8123/".
+        MyScale server url. Need full path, like http://localhost:8123/.
 
     :param str user:
         User name for authorization.
@@ -95,7 +95,7 @@ class Client(AsyncChClient):
         Database name.
 
     :param bool compress_response:
-        Pass True if you want Myscale to compress its responses with gzip.
+        Pass True if you want MyScale to compress its responses with gzip.
         They will be decompressed automatically. But overall it will be slightly slower.
 
     :param **settings:
@@ -140,11 +140,11 @@ class Client(AsyncChClient):
     ) -> None:
         """Execute query. Returns None.
 
-        :param str query: Myscale query string.
+        :param str query: MyScale query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
 
         Usage:
 
@@ -181,10 +181,10 @@ class Client(AsyncChClient):
     ) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -218,10 +218,10 @@ class Client(AsyncChClient):
     ) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -256,10 +256,10 @@ class Client(AsyncChClient):
     ) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -294,10 +294,10 @@ class Client(AsyncChClient):
     ) -> Iterator[Record]:
         """Async generator by all rows from query result.
 
-        :param str query: Myscale query string.
+        :param str query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:

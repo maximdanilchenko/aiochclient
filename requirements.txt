@@ -6,3 +6,4 @@ setuptools~=65.5.0
 cython~=0.29.32
 pytest~=7.2.0
 trio~=0.22.0
+nest_asyncio~=1.5.6

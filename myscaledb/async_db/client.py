@@ -242,7 +242,7 @@ class AsyncClient(BaseClient):
                async with ClientSession() as s:
                    async with AsyncClient(s) as client:
                    alive = await client.is_alive()
-                   print(f"Is Myscale alive? -> {alive}")
+                   print(f"Is MyScale alive? -> {alive}")
                    res = await client.fetch(query="select id,name from default.test_table")
                    for line in res:
                        print(f"{line[0]}---{line[1]}")
@@ -255,7 +255,7 @@ class AsyncClient(BaseClient):
         and one AsyncClient for all connections in your app.
 
     :param str url:
-        Myscale server url. Need full path, like "http://localhost:8123/".
+        MyScale server url. Need full path, like http://localhost:8123/.
 
     :param str user:
         User name for authorization.
@@ -267,7 +267,7 @@ class AsyncClient(BaseClient):
         Database name.
 
     :param bool compress_response:
-        Pass True if you want Myscale to compress its responses with gzip.
+        Pass True if you want MyScale to compress its responses with gzip.
         They will be decompressed automatically. But overall it will be slightly slower.
 
     :param **settings:
@@ -301,11 +301,11 @@ class AsyncClient(BaseClient):
     ) -> None:
         """Execute query. Returns None.
 
-        :param str query: Myscale query string.
+        :param str query: MyScale query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
 
         Usage:
 
@@ -342,10 +342,10 @@ class AsyncClient(BaseClient):
     ) -> List[Record]:
         """Execute query and fetch all rows from query result at once in a list.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -379,10 +379,10 @@ class AsyncClient(BaseClient):
     ) -> Optional[Record]:
         """Execute query and fetch first row from query result or None.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -417,10 +417,10 @@ class AsyncClient(BaseClient):
     ) -> Any:
         """Execute query and fetch first value of the first row from query result or None.
 
-        :param query: Myscale query string.
+        :param query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:
@@ -455,10 +455,10 @@ class AsyncClient(BaseClient):
     ) -> AsyncGenerator[Record, None]:
         """Async generator by all rows from query result.
 
-        :param str query: Myscale query string.
+        :param str query: MyScale query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
-        :param str query_id: Myscale query_id.
+        :param str query_id: MyScale query_id.
         :param decode: Decode to python types. If False, returns bytes for each field instead.
 
         Usage:

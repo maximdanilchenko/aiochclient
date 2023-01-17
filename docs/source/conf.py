@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.abspath("../.."))
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.intersphinx", "sphinx.ext.viewcode"]
 
 project = "myscaledb"
-author = "MochiXu"
-copyright = "MochiXu and contributors {0:%Y}".format(dt.datetime.utcnow())
+author = "Mochi Xu"
+copyright = "Moqi Inc. and contributors {0:%Y}".format(dt.datetime.utcnow())
 version = "2.0"
 source_suffix = ".rst"
 master_doc = "index"
@@ -18,7 +18,7 @@ html_static_path = ["_static"]
 
 html_theme_options = {
     "description": (
-        "Async http(s) clickhouse client for python 3.6+ "
+        "Async http(s) ClickHouse client for python 3.6+ "
         "with types converting and streaming support"
     ),
     "show_powered_by": False,

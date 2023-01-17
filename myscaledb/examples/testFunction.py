@@ -57,7 +57,7 @@ async def main():
     async with ClientSession() as s:
         async with AsyncClient(s,url="http://10.10.1.100:8123/") as client:
             alive = await client.is_alive()
-            print(f"Is Myscale alive? -> {alive}")
+            print(f"Is MyScale alive? -> {alive}")
 
 if __name__ == '__main__':
     print("\n\nasync test\n\n")

@@ -11,3 +11,4 @@ sphinx_issues
 sphinx_rtd_theme
 black
 isort==4.3.21
+nest_asyncio~=1.5.6
