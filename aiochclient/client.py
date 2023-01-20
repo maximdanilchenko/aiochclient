@@ -62,7 +62,7 @@ class ChClient:
     def __init__(
         self,
         session=None,
-        url: str = "http://localhost:28123/",
+        url: str = "http://localhost:8123/",
         user: str = None,
         password: str = None,
         database: str = "default",
