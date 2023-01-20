@@ -66,6 +66,8 @@ def rows(uuid):
             IPv6Address('2001:44c8:129:2632:33:0:252:2'),
             dt.datetime(2018, 9, 21, 10, 32, 23),
             True,
+            {"hello": "world"},
+            {"hello": {"inner": "world"}},
         ],
         [
             2,
@@ -110,6 +112,8 @@ def rows(uuid):
             None,
             1546300800000,
             False,
+            {"hello": "world"},
+            {"hello": {"inner": "world"}},
         ],
     ]
 
@@ -122,6 +126,7 @@ def http_client(request):
 @pytest.fixture(
     params=[
         {
+            "url": "http://localhost:28123/",
             "compress_response": True,
             "user": "default",
             "password": "",
@@ -184,7 +189,9 @@ async def all_types_db(chclient, rows):
                             ipv4 Nullable(IPv4),
                             ipv6 Nullable(IPv6),
                             datetime64 DateTime64(3, 'Europe/Moscow'),
-                            bool Bool
+                            bool Bool,
+                            map Map(String, String),
+                            map_map Map(String, Map(String, String))
                             ) ENGINE = Memory
     """
     )
@@ -204,6 +211,7 @@ async def all_types_db(chclient, rows):
           SELECT avgState(int32), sum(float32) FROM all_types
         """
     )
+
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
 
@@ -484,6 +492,32 @@ class TestTypes:
         record = await self.select_record_bytes("tuple")
         assert record[0] == result
         assert record["tuple"] == result
+
+    async def test_map(self):
+        result = {"hello": "world"}
+        assert await self.select_field("map") == result
+        record = await self.select_record("map")
+        assert record[0] == result
+        assert record["map"] == result
+
+        result = b"{'hello':'world'}"
+        assert await self.select_field_bytes("map") == result
+        record = await self.select_record_bytes("map")
+        assert record[0] == result
+        assert record["map"] == result
+
+    async def test_map_map(self):
+        result = {"hello": {"inner": "world"}}
+        assert await self.select_field("map_map") == result
+        record = await self.select_record("map_map")
+        assert record[0] == result
+        assert record["map_map"] == result
+
+        result = b"{'hello':{'inner':'world'}}"
+        assert await self.select_field_bytes("map_map") == result
+        record = await self.select_record_bytes("map_map")
+        assert record[0] == result
+        assert record["map_map"] == result
 
     async def test_nullable(self):
         result = 0

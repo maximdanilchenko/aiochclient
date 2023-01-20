@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
@@ -31,6 +32,7 @@ RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
+RE_MAP = re.compile(r"^Map\((.*)\)$")
 
 
 class BaseType(ABC):
@@ -291,6 +293,26 @@ class TupleType(BaseType):
         return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
 
+class MapType(BaseType):
+
+    __slots__ = ("name", "key_type", "value_type")
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
+        tps = RE_MAP.findall(name)[0]
+        comma_index = tps.index(",")
+        self.key_type = what_py_type(tps[:comma_index], container=True)
+        self.value_type = what_py_type(tps[comma_index + 1:], container=True)
+
+    def p_type(self, string: str | dict) -> dict:
+        if isinstance(string, str):
+            string = json.loads(string.replace("'", '"'))
+        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in string.items()}
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return json2ch(value, dumps=json.dumps).replace('"', "'").encode()
+
 class ArrayType(BaseType):
 
     __slots__ = ("name", "type")
@@ -379,6 +401,7 @@ CH_TYPES_MAPPING = {
     "DateTime": DateTimeType,
     "DateTime64": DateTime64Type,
     "Tuple": TupleType,
+    "Map": MapType,
     "Array": ArrayType,
     "Nullable": NullableType,
     "Nothing": NothingType,
@@ -400,6 +423,7 @@ PY_TYPES_MAPPING = {
     dt.date: DateType.unconvert,
     dt.datetime: DateTimeType.unconvert,
     tuple: TupleType.unconvert,
+    dict: MapType.unconvert,
     list: ArrayType.unconvert,
     type(None): NullableType.unconvert,
     UUID: UUIDType.unconvert,
@@ -436,7 +460,7 @@ def py2ch(value):
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
-            f"int, float, str, dt.date, dt.datetime, tuple, list, uuid.UUID (or None). "
+            f"int, float, str, dt.date, dt.datetime, dict, tuple, list, uuid.UUID (or None). "
             f"No subclasses yet."
         )
 

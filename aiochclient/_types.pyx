@@ -1,5 +1,6 @@
 #cython: language_level=3
 import re
+import json
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
@@ -47,6 +48,7 @@ RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
+RE_MAP = re.compile(r"^Map\((.*)\)$")
 
 
 cdef str decode(char* val):
@@ -438,6 +440,34 @@ cdef class TupleType:
         return self._convert(decode(value))
 
 
+class MapType(BaseType):
+
+    cdef:
+        str name
+        bint container
+        key_type
+        value_type
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+        tps = RE_MAP.findall(name)[0]
+        comma_index = tps.index(",")
+        self.key_type = what_py_type(tps[:comma_index], container=True)
+        self.value_type = what_py_type(tps[comma_index + 1:], container=True)
+
+    cdef dict _convert(self, str string):
+        if isinstance(string, str):
+            string = json.loads(string.replace("'", '"'))
+        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in string.items()}
+
+    cpdef dict p_type(self, str string):
+        return self._convert(string)
+
+    cpdef dict convert(self, bytes value):
+        return self._convert(decode(value))
+
+
 cdef class ArrayType:
 
     cdef:
@@ -623,6 +653,7 @@ cdef dict CH_TYPES_MAPPING = {
     "DateTime64": DateTime64Type,
     "Tuple": TupleType,
     "Array": ArrayType,
+    "Map": MapType,
     "Nullable": NullableType,
     "Nothing": NothingType,
     "UUID": UUIDType,
@@ -694,6 +725,8 @@ cdef bytes unconvert_datetime(object value):
 cdef bytes unconvert_tuple(tuple value):
     return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
+cdef bytes unconvert_dict(dict value):
+    return json2ch(value, dumps=json.dumps).replace('"', "'").encode()
 
 cdef bytes unconvert_array(list value):
     return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
@@ -723,6 +756,7 @@ cdef dict PY_TYPES_MAPPING = {
     date: unconvert_date,
     datetime: unconvert_datetime,
     tuple: unconvert_tuple,
+    dict: unconvert_dict,
     list: unconvert_array,
     type(None): unconvert_nullable,
     UUID: unconvert_uuid,
@@ -739,7 +773,7 @@ cpdef bytes py2ch(value):
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
-            f"int, float, str, dt.date, dt.datetime, tuple, list, uuid.UUID (or None). "
+            f"int, float, str, dt.date, dt.datetime, dict, tuple, list, uuid.UUID (or None). "
             f"No subclasses yet."
         )
 
