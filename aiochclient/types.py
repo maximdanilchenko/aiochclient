@@ -302,16 +302,20 @@ class MapType(BaseType):
         tps = RE_MAP.findall(name)[0]
         comma_index = tps.index(",")
         self.key_type = what_py_type(tps[:comma_index], container=True)
-        self.value_type = what_py_type(tps[comma_index + 1:], container=True)
+        self.value_type = what_py_type(tps[comma_index + 1 :], container=True)
 
-    def p_type(self, string: str | dict) -> dict:
+    def p_type(self, string: Any) -> dict:
         if isinstance(string, str):
             string = json.loads(string.replace("'", '"'))
-        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in string.items()}
+        return {
+            self.key_type.p_type(key): self.value_type.p_type(val)
+            for key, val in string.items()
+        }
 
     @staticmethod
     def unconvert(value) -> bytes:
         return json2ch(value, dumps=json.dumps).replace('"', "'").encode()
+
 
 class ArrayType(BaseType):
 
