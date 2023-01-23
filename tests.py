@@ -126,7 +126,6 @@ def http_client(request):
 @pytest.fixture(
     params=[
         {
-            "url": "http://localhost:28123/",
             "compress_response": True,
             "user": "default",
             "password": "",
