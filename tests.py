@@ -905,7 +905,7 @@ class TestRecord:
     async def test_index_error(self):
         record = await self.ch.fetchrow("SELECT * FROM all_types WHERE uint8=2")
         with pytest.raises(IndexError):
-            record[42]
+            record[len(self.rows[1])]
         records = await self.ch.fetch(
             "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
         )
