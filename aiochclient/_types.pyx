@@ -440,7 +440,7 @@ cdef class TupleType:
         return self._convert(decode(value))
 
 
-class MapType(BaseType):
+cdef class  MapType:
 
     cdef:
         str name
