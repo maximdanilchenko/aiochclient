@@ -175,6 +175,7 @@ vice-versa.
 | `Array(T)` | `List[T]` |
 | `Nullable(T)` | `None` or `T` |
 | `LowCardinality(T)` | `T` |
+| `Map(T1, T2)` | `Dict[T1, T2]` |
 
 ## Connection Pool Settings
 
