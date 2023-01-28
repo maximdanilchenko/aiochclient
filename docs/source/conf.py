@@ -9,7 +9,7 @@ extensions = ["sphinx.ext.autodoc", "sphinx.ext.intersphinx", "sphinx.ext.viewco
 project = "myscaledb"
 author = "Mochi Xu"
 copyright = "Moqi Inc. and contributors {0:%Y}".format(dt.datetime.utcnow())
-version = "2.0"
+version = "2.0.0"
 source_suffix = ".rst"
 master_doc = "index"
 pygments_style = "default"
@@ -18,7 +18,7 @@ html_static_path = ["_static"]
 
 html_theme_options = {
     "description": (
-        "Async http(s) ClickHouse client for python 3.6+ "
+        "Async and sync http(s) ClickHouse client for python 3.6+ "
         "with types converting and streaming support"
     ),
     "show_powered_by": False,

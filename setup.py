@@ -50,12 +50,12 @@ def read(fname):
 
 setup_opts = dict(
     name='myscaledb',
-    version='2.2.0',
-    description='Async http clickhouse client for python 3.6+',
+    version='2.0.0',
+    description='Async and sync http clickhouse client for python 3.6+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
-    author='Danilchenko Maksim',
-    author_email='dmax.dev@gmail.com',
+    author='MochiXu',
+    author_email='mochix@moqi.ai',
     packages=find_packages(exclude=('test*',)),
     package_dir={'myscaledb': 'myscaledb'},
     include_package_data=True,
@@ -68,7 +68,7 @@ setup_opts = dict(
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
-    keywords='clickhouse async python aiohttp',
+    keywords='clickhouse async sync python aiohttp',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',

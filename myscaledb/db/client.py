@@ -8,10 +8,11 @@ from myscaledb.async_db.client import BaseClient as AsyncChClient
 from myscaledb.common.exceptions import ClientError
 from myscaledb.common.records import Record
 import nest_asyncio
+
 nest_asyncio.apply()
 
-def iterate_async_to_sync(async_iterate, loop):
 
+def iterate_async_to_sync(async_iterate, loop):
     async_iterate = async_iterate.__aiter__()
 
     async def get_next():
@@ -25,7 +26,7 @@ def iterate_async_to_sync(async_iterate, loop):
         try:
             done, obj = loop.run_until_complete(get_next())
         except RuntimeError:
-            logging.warning("create new event loop...")
+            logging.debug("create new event loop...")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             done, obj = loop.run_until_complete(get_next())
@@ -49,7 +50,7 @@ def async_to_sync():
                 try:
                     loop = asyncio.get_event_loop()
                 except RuntimeError:
-                    logging.warning("create new event loop...")
+                    logging.debug("create new event loop...")
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 loop.set_exception_handler(handle_exception)
@@ -101,6 +102,7 @@ class Client(AsyncChClient):
     :param **settings:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
@@ -326,4 +328,3 @@ class Client(AsyncChClient):
                 decode=decode,
         ), asyncio.get_event_loop()):
             yield row
-

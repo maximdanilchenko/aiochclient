@@ -18,7 +18,7 @@ except ImportError:
     from myscaledb.common.types import rows2ch, json2ch, py2ch, list2ch
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.ERROR)
 
 
 class QueryTypes(Enum):
@@ -42,7 +42,6 @@ class BaseClient:
             json=json_,  # type: ignore
             **settings,
     ):
-        logging.info("myscale-client split Async/Sync init..")
         _http_client = HttpClientABC.choose_http_client(session)
         self._http_client = _http_client(session)
         self.url = url
@@ -87,7 +86,6 @@ class BaseClient:
         if params is None:
             return {}
         if not isinstance(params, dict):
-            logging.error("Query params must be a Dict[str, Any]")
             raise TypeError('Query params must be a Dict[str, Any]')
         prepared_query_params = {}
         for key, value in params.items():

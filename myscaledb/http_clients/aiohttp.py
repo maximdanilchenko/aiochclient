@@ -22,20 +22,15 @@ class AiohttpHttpClient(HttpClientABC):
     async def post_return_lines(
         self, url: str, params: dict, data: Any
     ) -> AsyncGenerator[bytes, None]:
-        """
-        逐行返回 post 后得到的 response
-        """
         async with self._session.post(url=url, params=params, data=data) as resp:
             await _check_response(resp)
 
-            # 通过空字符串创建空 bytes
             buffer: bytes = b''
             async for chunk in resp.content.iter_any():
                 lines: List[bytes] = chunk.split(self.line_separator)
                 lines[0] = buffer + lines[0]
                 buffer = lines.pop(-1)
                 for line in lines:
-                    # 逐行返回 post 后得到的 response
                     yield line + self.line_separator
             assert not buffer
 
