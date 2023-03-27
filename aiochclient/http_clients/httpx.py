@@ -13,20 +13,26 @@ class HttpxHttpClient(HttpClientABC):
         else:
             self._session = AsyncClient()
 
-    async def get(self, url: str, params: dict) -> None:
-        resp = await self._session.get(url=url, params=params)
+    async def get(self, url: str, params: dict, headers: dict) -> None:
+        resp = await self._session.get(url=url, params=params, headers=headers)
         await _check_response(resp)
 
     async def post_return_lines(
-        self, url: str, params: dict, data: Any
+        self, url: str, params: dict, headers: dict, data: Any
     ) -> AsyncGenerator[bytes, None]:
-        resp = await self._session.post(url=url, params=params, content=data)
+        resp = await self._session.post(
+            url=url, params=params, headers=headers, content=data
+        )
         await _check_response(resp)
         async for line in resp.aiter_lines():
             yield line.encode()
 
-    async def post_no_return(self, url: str, params: dict, data: Any) -> None:
-        resp = await self._session.post(url=url, params=params, content=data)
+    async def post_no_return(
+        self, url: str, params: dict, headers: dict, data: Any
+    ) -> None:
+        resp = await self._session.post(
+            url=url, params=params, headers=headers, content=data
+        )
         await _check_response(resp)
 
     async def close(self) -> None:

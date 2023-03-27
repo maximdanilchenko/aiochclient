@@ -6,17 +6,19 @@ from aiochclient.exceptions import ChClientError
 
 class HttpClientABC(ABC):
     @abstractmethod
-    async def get(self, url: str, params: dict) -> None:
+    async def get(self, url: str, params: dict, headers: dict) -> None:
         """Use aiochclient.exceptions.ChClientError in case of bad status code"""
 
     @abstractmethod
     async def post_return_lines(
-        self, url: str, params: dict, data: Any
+        self, url: str, params: dict, headers: dict, data: Any
     ) -> AsyncGenerator[bytes, None]:
         """Use aiochclient.exceptions.ChClientError in case of bad status code"""
 
     @abstractmethod
-    async def post_no_return(self, url: str, params: dict, data: Any) -> None:
+    async def post_no_return(
+        self, url: str, params: dict, headers: dict, data: Any
+    ) -> None:
         """Use aiochclient.exceptions.ChClientError in case of bad status code"""
 
     @abstractmethod
