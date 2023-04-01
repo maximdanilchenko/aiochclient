@@ -57,7 +57,7 @@ class ChClient:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
-    __slots__ = ("_session", "url", "params", "_json", "_http_client")
+    __slots__ = ("_session", "url", "params", "headers", "_json", "_http_client")
 
     def __init__(
         self,
@@ -74,10 +74,11 @@ class ChClient:
         self._http_client = _http_client(session)
         self.url = url
         self.params = {}
+        self.headers = {}
         if user:
-            self.params["user"] = user
+            self.headers["X-ClickHouse-User"] = user
         if password:
-            self.params["password"] = password
+            self.headers["X-ClickHouse-Key"] = password
         if database:
             self.params["database"] = database
         if compress_response:
@@ -113,7 +114,9 @@ class ChClient:
         """
         try:
             await self._http_client.get(
-                url=self.url, params={**self.params, "query": "SELECT 1"}
+                url=self.url,
+                params={**self.params, "query": "SELECT 1"},
+                headers=self.headers,
             )
         except ChClientError:
             return False
@@ -171,7 +174,7 @@ class ChClient:
 
         if need_fetch:
             response = self._http_client.post_return_lines(
-                url=self.url, params=params, data=data
+                url=self.url, params=params, headers=self.headers, data=data
             )
             if is_json:
                 rf = FromJsonFabric(loads=self._json.loads)
@@ -187,7 +190,7 @@ class ChClient:
                     yield rf.new(line)
         else:
             await self._http_client.post_no_return(
-                url=self.url, params=params, data=data
+                url=self.url, params=params, headers=self.headers, data=data
             )
 
     async def execute(
