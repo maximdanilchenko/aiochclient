@@ -17,7 +17,7 @@ check_format:
 	black . --check --diff --target-version py36
 
 build_cython:
-	 python setup.py build_ext --inplace
+	python setup.py build_ext --inplace
 
 html_types:
 	cython -a aiochclient/_types.pyx
