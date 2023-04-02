@@ -36,7 +36,6 @@ RE_MAP = re.compile(r"^Map\((.*)\)$")
 
 
 class BaseType(ABC):
-
     __slots__ = ("name", "container")
 
     ESC_CHR_MAPPING = {
@@ -272,7 +271,6 @@ class IPv6Type(BaseType):
 
 
 class TupleType(BaseType):
-
     __slots__ = ("name", "types")
 
     def __init__(self, name: str, **kwargs):
@@ -294,7 +292,6 @@ class TupleType(BaseType):
 
 
 class MapType(BaseType):
-
     __slots__ = ("name", "key_type", "value_type")
 
     def __init__(self, name: str, **kwargs):
@@ -318,7 +315,6 @@ class MapType(BaseType):
 
 
 class ArrayType(BaseType):
-
     __slots__ = ("name", "type")
 
     def __init__(self, name: str, **kwargs):
@@ -334,7 +330,6 @@ class ArrayType(BaseType):
 
 
 class NullableType(BaseType):
-
     __slots__ = ("name", "type")
     NULLABLE = {r"\N", "NULL"}
 
@@ -361,7 +356,6 @@ class NothingType(BaseType):
 
 
 class LowCardinalityType(BaseType):
-
     __slots__ = ("name", "type")
 
     def __init__(self, name: str, container: bool = False, **kwargs):
@@ -464,7 +458,8 @@ def py2ch(value):
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
             f"The value type should be exactly one of "
-            f"int, float, str, dt.date, dt.datetime, dict, tuple, list, uuid.UUID (or None). "
+            f"int, float, str, dt.date, dt.datetime, "
+            f"dict, tuple, list, uuid.UUID (or None). "
             f"No subclasses yet."
         )
 

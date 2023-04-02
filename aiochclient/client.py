@@ -206,7 +206,8 @@ class ChClient:
         :param str query: Clickhouse query string.
         :param args: Arguments for insert queries.
         :param bool json: Execute query in JSONEachRow mode.
-        :param Optional[Dict[str, Any]] params: Params to escape inside query string on field values.
+        :param Optional[Dict[str, Any]] params: Params to escape
+               inside query string on field values.
         :param str query_id: Clickhouse query_id.
 
         Usage:
@@ -214,7 +215,9 @@ class ChClient:
         .. code-block:: python
 
             await client.execute(
-                "CREATE TABLE t (a UInt8, b Tuple(Date, Nullable(Float32))) ENGINE = Memory"
+                "CREATE TABLE t (a UInt8,
+                                 b Tuple(Date, Nullable(Float32))
+                                 ) ENGINE = Memory"
             )
             await client.execute(
                 "INSERT INTO t VALUES",
@@ -248,7 +251,8 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
-        :param decode: Decode to python types. If False, returns bytes for each field instead.
+        :param decode: Decode to python types.
+                       If False, returns bytes for each field instead.
 
         Usage:
 
@@ -285,7 +289,8 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
-        :param decode: Decode to python types. If False, returns bytes for each field instead.
+        :param decode: Decode to python types. If False,
+                       returns bytes for each field instead.
 
         Usage:
 
@@ -325,13 +330,15 @@ class ChClient:
         query_id: str = None,
         decode: bool = True,
     ) -> Any:
-        """Execute query and fetch first value of the first row from query result or None.
+        """Execute query and fetch first value of the first
+           row from query result or None.
 
         :param query: Clickhouse query string.
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
-        :param decode: Decode to python types. If False, returns bytes for each field instead.
+        :param decode: Decode to python types.
+                       If False, returns bytes for each field instead.
 
         Usage:
 
@@ -369,7 +376,8 @@ class ChClient:
         :param bool json: Execute query in JSONEachRow mode.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
         :param str query_id: Clickhouse query_id.
-        :param decode: Decode to python types. If False, returns bytes for each field instead.
+        :param decode: Decode to python types.
+                       If False, returns bytes for each field instead.
 
         Usage:
 
