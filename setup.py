@@ -48,7 +48,7 @@ def read(fname):
 
 setup_opts = dict(
     name='aiochclient',
-    version='2.3.0',
+    version='2.3.1',
     description='Async http clickhouse client for python 3.6+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
@@ -61,7 +61,7 @@ setup_opts = dict(
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
-    keywords='clickhouse async python aiohttp',
+    keywords='clickhouse async python aiohttp httpx',
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
@@ -71,6 +71,8 @@ setup_opts = dict(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
     ],
     test_suite='tests',
     ext_modules=extensions,
