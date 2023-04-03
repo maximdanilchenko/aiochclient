@@ -1,4 +1,4 @@
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, List, Optional
 
 from httpx import AsyncClient, Response
 
@@ -7,6 +7,8 @@ from aiochclient.http_clients.abc import HttpClientABC
 
 
 class HttpxHttpClient(HttpClientABC):
+    line_separator: bytes = b'\n'
+
     def __init__(self, session: Optional[AsyncClient]):
         if session:
             self._session = session
@@ -24,8 +26,15 @@ class HttpxHttpClient(HttpClientABC):
             url=url, params=params, headers=headers, content=data
         )
         await _check_response(resp)
-        async for line in resp.aiter_lines():
-            yield line.encode()
+
+        buffer: bytes = b''
+        async for chunk in resp.aiter_bytes():
+            lines: List[bytes] = chunk.split(self.line_separator)
+            lines[0] = buffer + lines[0]
+            buffer = lines.pop(-1)
+            for line in lines:
+                yield line + self.line_separator
+        assert not buffer
 
     async def post_no_return(
         self, url: str, params: dict, headers: dict, data: Any
