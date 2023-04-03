@@ -456,12 +456,14 @@ cdef class  MapType:
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
 
-    cdef dict _convert(self, str string):
+    cdef dict _convert(self, string):
         if isinstance(string, str):
-            string = json.loads(string.replace("'", '"'))
-        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in string.items()}
+            dict_from_string = json.loads(string.replace("'", '"'))
+        else:
+            dict_from_string = string
+        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in dict_from_string.items()}
 
-    cpdef dict p_type(self, str string):
+    cpdef dict p_type(self, string):
         return self._convert(string)
 
     cpdef dict convert(self, bytes value):
