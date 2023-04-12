@@ -1,5 +1,5 @@
 format:
-	isort -y
+	isort .
 	black .
 
 test:

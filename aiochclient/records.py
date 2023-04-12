@@ -3,9 +3,9 @@ from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
 # Optional cython extension:
 try:
-    from aiochclient._types import what_py_converter, empty_convertor
+    from aiochclient._types import empty_convertor, what_py_converter
 except ImportError:
-    from aiochclient.types import what_py_converter, empty_convertor
+    from aiochclient.types import empty_convertor, what_py_converter
 
 __all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
 

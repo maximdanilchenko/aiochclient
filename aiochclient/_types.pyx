@@ -1,15 +1,23 @@
 #cython: language_level=3
-import re
 import json
+import re
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
 
+from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
 from cpython.datetime cimport date, datetime
-from cpython cimport PyUnicode_Join, PyUnicode_AsEncodedString, PyList_Append
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.stdint cimport (int8_t, int16_t, int32_t, int64_t,
-                          uint8_t, uint16_t, uint32_t, uint64_t)
+from cpython.mem cimport PyMem_Free, PyMem_Malloc
+from libc.stdint cimport (
+    int8_t,
+    int16_t,
+    int32_t,
+    int64_t,
+    uint8_t,
+    uint16_t,
+    uint32_t,
+    uint64_t,
+)
 
 from aiochclient.exceptions import ChClientError
 

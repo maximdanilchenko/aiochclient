@@ -11,9 +11,9 @@ from aiochclient.sql import sqlparse
 
 # Optional cython extension:
 try:
-    from aiochclient._types import rows2ch, json2ch, py2ch
+    from aiochclient._types import json2ch, py2ch, rows2ch
 except ImportError:
-    from aiochclient.types import rows2ch, json2ch, py2ch
+    from aiochclient.types import json2ch, py2ch, rows2ch
 
 
 class QueryTypes(Enum):
