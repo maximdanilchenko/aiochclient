@@ -2,7 +2,8 @@ import re
 
 import sqlparse.keywords
 from sqlparse import tokens
-from sqlparse.keywords import KEYWORDS_COMMON
+from sqlparse.keywords import KEYWORDS_COMMON, KEYWORDS
+from sqlparse.lexer import Lexer
 
 
 class Where(sqlparse.sql.TokenList):
@@ -26,21 +27,26 @@ class Where(sqlparse.sql.TokenList):
 
 sqlparse.sql.Where = Where
 
-KEYWORDS_COMMON['FORMAT'] = tokens.Keyword
-KEYWORDS_COMMON['EXISTS'] = tokens.Keyword.DML
-KEYWORDS_COMMON['DESCRIBE'] = tokens.Keyword.DML
-KEYWORDS_COMMON['SHOW'] = tokens.Keyword.DML
-SQL_REGEX = {
-    'clickhouse-ext': [
-        ('(FORMAT|EXISTS)\b', sqlparse.tokens.Keyword),
-        ('(DESCRIBE|SHOW)\b', sqlparse.tokens.Keyword.DML),
+SQLPARSE_LEXER = Lexer.get_default_instance()
+SQLPARSE_LEXER.clear()
+
+# Regex
+SQLPARSE_LEXER.set_SQL_REGEX(
+    [
+        (r'(FORMAT)\b', sqlparse.tokens.Keyword),
+        (r'(DESCRIBE|SHOW|EXISTS)\b', sqlparse.tokens.Keyword.DML),
+        *sqlparse.keywords.SQL_REGEX,
     ]
-}
+)
 
-FLAGS = re.IGNORECASE | re.UNICODE
-SQL_REGEX = [
-    (re.compile(rx, FLAGS).match, tt) for rx, tt in SQL_REGEX['clickhouse-ext']
-]
-
-sqlparse.keywords.SQL_REGEX = SQL_REGEX + sqlparse.keywords.SQL_REGEX
-sqlparse.lexer.SQL_REGEX = sqlparse.keywords.SQL_REGEX
+# Keywords
+SQLPARSE_LEXER.add_keywords(KEYWORDS_COMMON)
+SQLPARSE_LEXER.add_keywords(KEYWORDS)
+SQLPARSE_LEXER.add_keywords(
+    {
+        'FORMAT': tokens.Keyword,
+        'EXISTS': tokens.Keyword.DML,
+        'DESCRIBE': tokens.Keyword.DML,
+        'SHOW': tokens.Keyword.DML,
+    }
+)
