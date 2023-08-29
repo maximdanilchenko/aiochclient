@@ -11,3 +11,5 @@ exclude = '''
 [tool.pytest.ini_options]
 markers = ["types", "fetching", "client", "record"]
 asyncio_mode = "auto"
+[build-system]
+requires = ["setuptools", "wheel", "Cython"]
