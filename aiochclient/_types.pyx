@@ -469,7 +469,7 @@ cdef class  MapType:
             dict_from_string = json.loads(string.replace("'", '"'))
         else:
             dict_from_string = string
-        return {self.key_type.p_type(key): self.value_type.p_type(val) for key, val in dict_from_string.items()}
+        return {self.key_type.p_type(key): self.value_type.p_type(str(val)) for key, val in dict_from_string.items()}
 
     cpdef dict p_type(self, string):
         return self._convert(string)
