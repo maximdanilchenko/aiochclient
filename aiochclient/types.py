@@ -33,6 +33,7 @@ RE_ARRAY = re.compile(r"^Array\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
+RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
 
 
 class BaseType(ABC):
@@ -52,6 +53,7 @@ class BaseType(ABC):
 
     DQ = "'"
     CM = ","
+    ESCAPE_OP = '\\'
     TUP_OP = '('
     TUP_CLS = ')'
     ARR_OP = '['
@@ -100,6 +102,7 @@ class BaseType(ABC):
         in_str = False
         in_arr = False
         in_tup = False
+        escape_char = False
         if not raw:
             return None
         for sym in raw:
@@ -115,11 +118,16 @@ class BaseType(ABC):
                 elif sym == cls.TUP_OP:
                     in_tup = True
             elif in_str and sym == cls.DQ:
-                in_str = not in_str
+                if not escape_char:
+                    in_str = not in_str
             elif in_arr and sym == cls.ARR_CLS:
                 in_arr = False
             elif in_tup and sym == cls.TUP_CLS:
                 in_tup = False
+            if in_str and sym == cls.ESCAPE_OP:
+                escape_char = not escape_char
+            else:
+                escape_char = False
             cur.append(sym)
         yield "".join(cur)
 
@@ -282,9 +290,12 @@ class TupleType(BaseType):
 
     def p_type(self, string: str) -> tuple:
         return tuple(
-            tp.p_type(val)
+            tp.p_type(self.decode(val.encode()))
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
+
+    def convert(self, value: bytes) -> list:
+        return self.p_type(value.decode())
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -303,11 +314,20 @@ class MapType(BaseType):
 
     def p_type(self, string: Any) -> dict:
         if isinstance(string, str):
-            string = json.loads(string.replace("'", '"'))
+            string = RE_REPLACE_QUOTE.sub('"', string)
+            string = string.replace('\\', '\\\\')
+            string = json.loads(string)
         return {
-            self.key_type.p_type(key): self.value_type.p_type(val)
+            self.key_type.p_type(
+                self.decode(key.encode()) if isinstance(key, str) else key
+            ): self.value_type.p_type(
+                self.decode(val.encode()) if isinstance(val, str) else val
+            )
             for key, val in string.items()
         }
+
+    def convert(self, value: bytes) -> list:
+        return self.p_type(value.decode())
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -322,7 +342,13 @@ class ArrayType(BaseType):
         self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
-        return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
+        return [
+            self.type.p_type(self.decode(val.encode()))
+            for val in self.seq_parser(string[1:-1])
+        ]
+
+    def convert(self, value: bytes) -> list:
+        return self.p_type(value.decode())
 
     @staticmethod
     def unconvert(value) -> bytes:
