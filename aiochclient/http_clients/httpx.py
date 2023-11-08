@@ -30,10 +30,11 @@ class HttpxHttpClient(HttpClientABC):
         buffer: bytes = b''
         async for chunk in resp.aiter_bytes():
             lines: List[bytes] = chunk.split(self.line_separator)
-            lines[0] = buffer + lines[0]
-            buffer = lines.pop(-1)
-            for line in lines:
+            if buffer:
+                lines[0] = buffer + lines[0]
+            for line in lines[:-1]:
                 yield line + self.line_separator
+            buffer = lines[-1]
         assert not buffer
 
     async def post_no_return(
