@@ -1,10 +1,11 @@
 # aiochclient
 
 [![PyPI version](https://badge.fury.io/py/aiochclient.svg)](https://badge.fury.io/py/aiochclient)
-[![Travis CI](https://app.travis-ci.com/maximdanilchenko/aiochclient.svg?branch=master)](https://app.travis-ci.com/maximdanilchenko/aiochclient)
+[![Tests](https://github.com/maximdanilchenko/aiochclient/actions/workflows/tests.yml/badge.svg)](https://github.com/maximdanilchenko/aiochclient/actions/workflows/tests.yml)
 [![Documentation Status](https://readthedocs.org/projects/aiochclient/badge/?version=latest)](https://aiochclient.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/maximdanilchenko/aiochclient/branch/master/graph/badge.svg)](https://codecov.io/gh/maximdanilchenko/aiochclient)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+
 
 An async http(s) ClickHouse client for python 3.6+ supporting type
 conversion in both directions, streaming, lazy decoding on select queries, and a
