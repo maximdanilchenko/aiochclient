@@ -9,7 +9,7 @@ tests: test
 
 upload: build_cython
 	if [ -d dist ]; then rm -Rf dist; fi
-	python3 setup.py sdist
+	python setup.py sdist
 	twine upload dist/*
 
 check_format:
@@ -17,7 +17,7 @@ check_format:
 	black . --check --diff --target-version py36
 
 build_cython:
-	python3 setup.py build_ext --inplace
+	python setup.py build_ext --inplace
 
 html_types:
 	cython -a aiochclient/_types.pyx

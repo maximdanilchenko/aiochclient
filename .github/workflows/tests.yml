@@ -2,7 +2,6 @@ name: Tests
 on: [push]
 jobs:
   build:
-
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -13,7 +12,6 @@ jobs:
           "dev-requirements/dev-requirements-cython.txt",
           "dev-requirements/dev-requirements-cython-ciso.txt"
         ]
-
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
