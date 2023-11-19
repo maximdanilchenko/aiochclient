@@ -2,7 +2,7 @@ format:
 	isort .
 	black .
 
-test:
+test: install-dev-requirements docker-clickhouse
 	pytest tests.py --cov aiochclient -x -vv
 
 tests: test
@@ -21,3 +21,11 @@ build_cython:
 
 html_types:
 	cython -a aiochclient/_types.pyx
+
+docker-clickhouse:
+	docker pull yandex/clickhouse-server
+	docker start cs || docker run -p 8123:8123 -d --name cs yandex/clickhouse-server
+
+install-dev-requirements:
+	pip install twine
+	pip install -r dev-requirements/dev-requirements-cython-ciso.txt --upgrade

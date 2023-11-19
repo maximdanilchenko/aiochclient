@@ -99,18 +99,18 @@ class BaseType(ABC):
         Generator for parsing tuples and arrays.
         Returns elements one by one
         """
+        if not raw:
+            return None
         cur = []
         in_str = False
         in_arr = False
         in_tup = False
         escape_char = False
-        if not raw:
-            return None
         for sym in raw:
             if not (in_str or in_arr or in_tup):
                 if sym == cls.CM:
                     yield "".join(cur)
-                    cur = []
+                    cur.clear()
                     continue
                 elif sym == cls.DQ:
                     in_str = not in_str
@@ -327,7 +327,7 @@ class MapType(BaseType):
             for key, val in string.items()
         }
 
-    def convert(self, value: bytes) -> list:
+    def convert(self, value: bytes) -> dict:
         return self.p_type(value.decode())
 
     @staticmethod
@@ -445,10 +445,14 @@ CH_TYPES_MAPPING = {
     "UInt16": IntType,
     "UInt32": IntType,
     "UInt64": IntType,
+    "UInt128": IntType,
+    "UInt256": IntType,
     "Int8": IntType,
     "Int16": IntType,
     "Int32": IntType,
     "Int64": IntType,
+    "Int128": IntType,
+    "Int256": IntType,
     "Float32": FloatType,
     "Float64": FloatType,
     "String": StrType,

@@ -42,6 +42,11 @@ else:
     date_parse = datetime_parse = datetime_parse_f = ciso8601.parse_datetime
 
 
+cdef extern from *:
+    ctypedef int int128 "__int128_t"
+    ctypedef int uint128 "__uint128_t"
+
+
 __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
 
 
@@ -256,6 +261,40 @@ cdef class Int64Type:
         return int(value)
 
 
+cdef class Int128Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef int128 p_type(self, str string):
+        return int(string)
+
+    cpdef int128 convert(self, bytes value):
+        return int(value)
+
+
+cdef class Int256Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef p_type(self, str string):
+        return int(string)
+
+    cpdef convert(self, bytes value):
+        return int(value)
+
+
 cdef class UInt8Type:
 
     cdef:
@@ -321,6 +360,40 @@ cdef class UInt64Type:
         return int(string)
 
     cpdef uint64_t convert(self, bytes value):
+        return int(value)
+
+
+cdef class UInt128Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef uint128 p_type(self, str string):
+        return int(string)
+
+    cpdef uint128 convert(self, bytes value):
+        return int(value)
+
+
+cdef class UInt256Type:
+
+    cdef:
+        str name
+        bint container
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+
+    cpdef p_type(self, str string):
+        return int(string)
+
+    cpdef convert(self, bytes value):
         return int(value)
 
 
@@ -648,10 +721,14 @@ cdef dict CH_TYPES_MAPPING = {
     "UInt16": UInt16Type,
     "UInt32": UInt32Type,
     "UInt64": UInt64Type,
+    "UInt128": Int128Type,
+    "UInt256": Int256Type,
     "Int8": Int8Type,
     "Int16": Int16Type,
     "Int32": Int32Type,
     "Int64": Int64Type,
+    "Int128": Int128Type,
+    "Int256": Int256Type,
     "Float32": FloatType,
     "Float64": FloatType,
     "String": StrType,
