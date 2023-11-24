@@ -225,6 +225,9 @@ class DateTimeType(BaseType):
 
     @staticmethod
     def unconvert(value: dt.datetime) -> bytes:
+        if value.microsecond != 0:
+            # In case of 0000-00-00 00:00:00.000 (datetime64)
+            return b"%a" % dt.datetime.strftime(value, '%Y-%m-%d %H:%M:%S.%f')
         return b"%a" % dt.datetime.strftime(value, '%Y-%m-%d %H:%M:%S')
 
 

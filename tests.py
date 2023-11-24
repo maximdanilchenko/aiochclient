@@ -68,7 +68,7 @@ def rows(uuid):
             [[1, 2, 3], [1, 2], [6, 7]],
             IPv4Address('116.253.40.133'),
             IPv6Address('2001:44c8:129:2632:33:0:252:2'),
-            dt.datetime(2018, 9, 21, 10, 32, 23),
+            dt.datetime(2018, 9, 21, 10, 32, 23, 999000),
             True,
             {"hello": "world"},
             {"hello": {"inner": "world"}},
@@ -846,17 +846,17 @@ class TestTypes:
         assert await self.select_field_bytes("ipv6") == b"2001:44c8:129:2632:33:0:252:2"
 
     async def test_datetime64(self):
-        result = dt.datetime(2018, 9, 21, 10, 32, 23)
-        assert await self.select_field("datetime") == result
-        record = await self.select_record("datetime")
+        result = dt.datetime(2018, 9, 21, 10, 32, 23, 999000)
+        assert await self.select_field("datetime64") == result
+        record = await self.select_record("datetime64")
         assert record[0] == result
-        assert record["datetime"] == result
+        assert record["datetime64"] == result
 
-        result = b"2018-09-21 10:32:23"
-        assert await self.select_field_bytes("datetime") == result
-        record = await self.select_record_bytes("datetime")
-        assert record[0] == result
-        assert record["datetime"] == result
+        result = b"2018-09-21 10:32:23.999"
+        assert await self.select_field_bytes("datetime64") == result
+        record = await self.select_record_bytes("datetime64")
+        assert record[0] == result, record
+        assert record["datetime64"] == result, record
 
     async def test_named_tuples(self):
         """Named tuples are used for example in geohash functions
