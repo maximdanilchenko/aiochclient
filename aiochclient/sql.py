@@ -2,7 +2,7 @@ import re
 
 import sqlparse.keywords
 from sqlparse import tokens
-from sqlparse.keywords import KEYWORDS_COMMON, KEYWORDS
+from sqlparse.keywords import KEYWORDS, KEYWORDS_COMMON
 from sqlparse.lexer import Lexer
 
 

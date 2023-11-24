@@ -806,7 +806,7 @@ cdef bytes unconvert_date(object value):
 
 
 cdef bytes unconvert_datetime(object value):
-    return f"'{value.replace(microsecond=0)}'".encode('latin-1')
+    return f"'{value}'".encode('latin-1')
 
 
 cdef bytes unconvert_tuple(tuple value):
