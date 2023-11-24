@@ -157,6 +157,7 @@ visit the [readthedocs site.](https://aiochclient.readthedocs.io/en/latest/).
 `aiochclient` automatically converts types from ClickHouse to python types and
 vice-versa.
 
+
 | ClickHouse type      | Python type             |
 |:---------------------|:------------------------|
 | `Bool`               | `bool`                  |
@@ -194,6 +195,8 @@ vice-versa.
 | `Nullable(T)`        | `None` or `T`           |
 | `LowCardinality(T)`  | `T`                     |
 | `Map(T1, T2)`        | `Dict[T1, T2]`          |
+| `Nested(T1, T2, ...)` | `List[Tuple[T1, T2, ...], Tuple[T1, T2, ...]]` |
+
 
 ## Connection Pool Settings
 

@@ -30,6 +30,7 @@ __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch", "empty_convertor"
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_NESTED = re.compile(r"^Nested\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
@@ -355,6 +356,39 @@ class ArrayType(BaseType):
         return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
+class NestedType(BaseType):
+    __slots__ = ("name", "types")
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__(name, **kwargs)
+        self.types = [
+            what_py_type(i.split()[1], container=True)
+            for i in RE_NESTED.findall(name)[0].split(',')
+        ]
+
+    def p_type(self, string: str) -> list[tuple]:
+        return [
+            tuple(
+                tp.p_type(self.decode(elem.encode()))
+                for tp, elem in zip(self.types, self.seq_parser(val.strip("()")))
+            )
+            for val in self.seq_parser(string[1:-1])
+        ]
+
+    def convert(self, value: bytes) -> list[tuple]:
+        return self.p_type(value.decode())
+
+    @staticmethod
+    def unconvert(value) -> bytes:
+        return (
+            b"["
+            + b",".join(
+                b"(" + b",".join(py2ch(elem) for elem in val) + b")" for val in value
+            )
+            + b"]"
+        )
+
+
 class NullableType(BaseType):
     __slots__ = ("name", "type")
     NULLABLE = {r"\N", "NULL"}
@@ -441,6 +475,7 @@ CH_TYPES_MAPPING = {
     "Decimal128": DecimalType,
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
+    "Nested": NestedType,
 }
 
 PY_TYPES_MAPPING = {

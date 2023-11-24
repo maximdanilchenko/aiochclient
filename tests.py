@@ -72,6 +72,8 @@ def rows(uuid):
             True,
             {"hello": "world"},
             {"hello": {"inner": "world"}},
+            [(1, 2), (3, 4)],
+            [('hello', dt.date(2018, 9, 21)), ('world', dt.date(2018, 9, 22))],
         ],
         [
             2,
@@ -122,6 +124,12 @@ def rows(uuid):
             False,
             {"hello": "world"},
             {"hello": {"inner": "world"}},
+            [(0, 1)],
+            [
+                ('hello', dt.date(2018, 9, 21)),
+                ('inner', dt.date(2018, 9, 22)),
+                ('world', dt.date(2018, 9, 23)),
+            ],
         ],
     ]
 
@@ -139,8 +147,12 @@ def http_client(request):
             "password": "",
             "database": "default",
             "allow_suspicious_low_cardinality_types": 1,
+            "flatten_nested": 0,
         },
-        {"allow_suspicious_low_cardinality_types": 1},
+        {
+            "allow_suspicious_low_cardinality_types": 1,
+            "flatten_nested": 0,
+        },
     ]
 )
 async def chclient(request, http_client):
@@ -202,7 +214,9 @@ async def all_types_db(chclient, rows):
                             datetime64 DateTime64(3, 'Europe/Moscow'),
                             bool Bool,
                             map Map(String, String),
-                            map_map Map(String, Map(String, String))
+                            map_map Map(String, Map(String, String)),
+                            nested_int Nested(value1 Integer, value2 Integer),
+                            nested_str_date Nested(value1 String, value2 Date),
                             ) ENGINE = Memory
     """
     )
@@ -542,6 +556,32 @@ class TestTypes:
         record = await self.select_record_bytes("array_uint8")
         assert record[0] == result
         assert record["array_uint8"] == result
+
+    async def test_nested_int(self):
+        result = [(1, 2), (3, 4)]
+        assert await self.select_field("nested_int") == result
+        record = await self.select_record("nested_int")
+        assert record[0] == result
+        assert record["nested_int"] == result
+
+        result = b'[(1,2),(3,4)]'
+        assert await self.select_field_bytes("nested_int") == result
+        record = await self.select_record_bytes("nested_int")
+        assert record[0] == result
+        assert record["nested_int"] == result
+
+    async def test_nested_string_date(self):
+        result = [('hello', dt.date(2018, 9, 21)), ('world', dt.date(2018, 9, 22))]
+        assert await self.select_field("nested_str_date") == result
+        record = await self.select_record("nested_str_date")
+        assert record[0] == result
+        assert record["nested_str_date"] == result
+
+        result = b"[('hello','2018-09-21'),('world','2018-09-22')]"
+        assert await self.select_field_bytes("nested_str_date") == result
+        record = await self.select_record_bytes("nested_str_date")
+        assert record[0] == result
+        assert record["nested_str_date"] == result
 
     async def test_tuple(self):
         result = (4, "hello")
@@ -933,7 +973,9 @@ class TestFetching:
 
     @pytest.mark.skip  # TODO: unskip after cython quoted string fix
     async def test_quoted_string_array(self):
-        record = await self.ch.fetchrow("SELECT ['foo\\'foo', 'bar', 'foo\\\\'] as array")
+        record = await self.ch.fetchrow(
+            "SELECT ['foo\\'foo', 'bar', 'foo\\\\'] as array"
+        )
         assert record == {'array': ["foo'foo", 'bar', 'foo\\']}
 
     @pytest.mark.skip  # TODO: unskip after cython quoted string fix
@@ -1049,4 +1091,29 @@ class TestJson:
                 "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
                 "low_cardinality_str": "meow test",
             }
+        ]
+
+    async def test_select_nested_json(self):
+        result = await self.ch.fetch(
+            "SELECT nested_int, nested_str_date FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
+        )
+        assert result[0]['nested_int'] == [
+            {
+                'value1': 0,
+                'value2': 1,
+            }
+        ]
+        assert result[0]['nested_str_date'] == [
+            {
+                'value1': 'hello',
+                'value2': '2018-09-21',
+            },
+            {
+                'value1': 'inner',
+                'value2': '2018-09-22',
+            },
+            {
+                'value1': 'world',
+                'value2': '2018-09-23',
+            },
         ]
