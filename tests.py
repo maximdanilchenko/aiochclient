@@ -971,14 +971,12 @@ class TestFetching:
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")
         assert record == {'quoted_string': "foo'bar"}
 
-    @pytest.mark.skip  # TODO: unskip after cython quoted string fix
     async def test_quoted_string_array(self):
         record = await self.ch.fetchrow(
             "SELECT ['foo\\'foo', 'bar', 'foo\\\\'] as array"
         )
         assert record == {'array': ["foo'foo", 'bar', 'foo\\']}
 
-    @pytest.mark.skip  # TODO: unskip after cython quoted string fix
     async def test_quoted_string_tuple(self):
         record = await self.ch.fetchrow("SELECT ('foo\\'foo', 'bar') as tuple")
         assert record == {
@@ -988,7 +986,6 @@ class TestFetching:
             )
         }
 
-    @pytest.mark.skip  # TODO: unskip after cython quoted string fix
     async def test_quoted_string_map(self):
         record = await self.ch.fetchrow("SELECT map('foo\\'foo', 'bar\\'bar') as map")
         assert record == {'map': {"foo'foo": "bar'bar"}}

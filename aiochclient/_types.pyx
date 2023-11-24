@@ -52,6 +52,7 @@ __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
 
 DEF DQ = "'"
 DEF CM = ","
+DEF ESCAPE_OP = '\\'
 DEF TUP_OP = '('
 DEF TUP_CLS = ')'
 DEF ARR_OP = '['
@@ -62,6 +63,7 @@ RE_ARRAY = re.compile(r"^Array\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
+RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
 
 
 cdef str decode(char* val):
@@ -123,7 +125,7 @@ cdef list seq_parser(str raw):
     """
     cdef:
         list res = [], cur = []
-        bint in_str = False, in_arr = False, in_tup = False
+        bint in_str = False, in_arr = False, in_tup = False, escape_char = False
     if not raw:
         return res
     for sym in raw:
@@ -139,11 +141,16 @@ cdef list seq_parser(str raw):
             elif sym == TUP_OP:
                 in_tup = True
         elif in_str and sym == DQ:
-            in_str = not in_str
+            if not escape_char:
+                in_str = not in_str
         elif in_arr and sym == ARR_CLS:
             in_arr = False
         elif in_tup and sym == TUP_CLS:
             in_tup = False
+        if in_str and sym == ESCAPE_OP:
+            escape_char = not escape_char
+        else:
+            escape_char = False
         PyList_Append(cur, sym)
     PyList_Append(res, PyUnicode_Join("", cur))
     return res
@@ -510,7 +517,7 @@ cdef class TupleType:
 
     cdef tuple _convert(self, str string):
         return tuple(
-            tp(val)
+            tp(decode(val.encode()))
             for tp, val in zip(self.types, seq_parser(string[1:-1]))
         )
 
@@ -518,7 +525,7 @@ cdef class TupleType:
         return self._convert(string)
 
     cpdef tuple convert(self, bytes value):
-        return self._convert(decode(value))
+        return self._convert(value.decode())
 
 
 cdef class  MapType:
@@ -539,16 +546,24 @@ cdef class  MapType:
 
     cdef dict _convert(self, string):
         if isinstance(string, str):
-            dict_from_string = json.loads(string.replace("'", '"'))
+            string = RE_REPLACE_QUOTE.sub('"', string)
+            string = string.replace('\\', '\\\\')
+            dict_from_string = json.loads(string)
         else:
             dict_from_string = string
-        return {self.key_type.p_type(key): self.value_type.p_type(str(val)) for key, val in dict_from_string.items()}
+        return {
+            self.key_type.p_type(
+                decode(key.encode()) if isinstance(key, str) else key
+            ): self.value_type.p_type(
+                decode(val.encode()) if isinstance(val, str) else val
+            ) for key, val in dict_from_string.items()
+        }
 
     cpdef dict p_type(self, string):
         return self._convert(string)
 
     cpdef dict convert(self, bytes value):
-        return self._convert(decode(value))
+        return self._convert(value.decode())
 
 
 cdef class ArrayType:
@@ -566,13 +581,13 @@ cdef class ArrayType:
         )
 
     cdef list _convert(self, str string):
-        return [self.type.p_type(val) for val in seq_parser(string[1:-1])]
+        return [self.type.p_type(decode(val.encode())) for val in seq_parser(string[1:-1])]
 
     cpdef list p_type(self, str string):
         return self._convert(string)
 
     cpdef list convert(self, bytes value):
-        return self.p_type(decode(value))
+        return self.p_type(value.decode())
 
 
 cdef class NullableType:
