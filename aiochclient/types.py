@@ -4,7 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Any, Callable, Generator, Optional
+from typing import Any, Callable, Generator, List, Optional
 from uuid import UUID
 
 from aiochclient.exceptions import ChClientError
@@ -369,7 +369,7 @@ class NestedType(BaseType):
             for i in RE_NESTED.findall(name)[0].split(',')
         ]
 
-    def p_type(self, string: str) -> list[tuple]:
+    def p_type(self, string: str) -> List[tuple]:
         return [
             tuple(
                 tp.p_type(self.decode(elem.encode()))
@@ -378,7 +378,7 @@ class NestedType(BaseType):
             for val in self.seq_parser(string[1:-1])
         ]
 
-    def convert(self, value: bytes) -> list[tuple]:
+    def convert(self, value: bytes) -> List[tuple]:
         return self.p_type(value.decode())
 
     @staticmethod
