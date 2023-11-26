@@ -216,7 +216,7 @@ async def all_types_db(chclient, rows):
                             map Map(String, String),
                             map_map Map(String, Map(String, String)),
                             nested_int Nested(value1 Integer, value2 Integer),
-                            nested_str_date Nested(value1 String, value2 Date),
+                            nested_str_date Nested(value1 String, value2 Date)
                             ) ENGINE = Memory
     """
     )
@@ -1095,22 +1095,10 @@ class TestJson:
             "SELECT nested_int, nested_str_date FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
         )
         assert result[0]['nested_int'] == [
-            {
-                'value1': 0,
-                'value2': 1,
-            }
+            [0, 1]
         ]
         assert result[0]['nested_str_date'] == [
-            {
-                'value1': 'hello',
-                'value2': '2018-09-21',
-            },
-            {
-                'value1': 'inner',
-                'value2': '2018-09-22',
-            },
-            {
-                'value1': 'world',
-                'value2': '2018-09-23',
-            },
+            ['hello', '2018-09-21'],
+            ['inner', '2018-09-22'],
+            ['world', '2018-09-23'],
         ]
