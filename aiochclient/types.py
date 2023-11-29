@@ -335,7 +335,11 @@ class MapType(BaseType):
 
     @staticmethod
     def unconvert(value) -> bytes:
-        return json2ch(value, dumps=json.dumps).replace('"', "'").encode()
+        return (
+            b"{"
+            + b','.join(py2ch(key) + b':' + py2ch(val) for key, val in value.items())
+            + b"}"
+        )
 
 
 class ArrayType(BaseType):
