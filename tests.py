@@ -1039,8 +1039,6 @@ class TestRecord:
         records = await self.ch.fetch(
             "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
         )
-        print([dict(i) for i in records])
-        # print(records[-2])
         assert bool(records[-2]) is False
 
     async def test_len(self):
