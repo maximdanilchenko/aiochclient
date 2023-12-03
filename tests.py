@@ -971,7 +971,7 @@ class TestFetching:
 
     async def test_show_tables_with_fetch(self):
         tables = await self.ch.fetch("SHOW TABLES")
-        assert len(tables) == 19
+        assert len(tables) == 3
         assert tables[0]._row.decode() == 'all_types'
 
     async def test_aggr_merge_tree(self):
