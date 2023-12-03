@@ -1,11 +1,12 @@
+import inspect
 from collections.abc import Mapping
 from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
 # Optional cython extension:
 try:
-    from aiochclient._types import empty_convertor, what_py_converter
+    from aiochclient._types import StrType, empty_convertor, what_py_type
 except ImportError:
-    from aiochclient.types import empty_convertor, what_py_converter
+    from aiochclient.types import BaseType, StrType, empty_convertor, what_py_type
 
 __all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
 
@@ -30,17 +31,23 @@ class Record(Mapping):
 
     __slots__ = ("_converters", "_decoded", "_names", "_row")
 
-    def __init__(self, row: bytes, names: Dict[str, Any], converters: List[Callable]):
+    def __init__(
+        self,
+        row: bytes,
+        names: Dict[str, Any],
+        converters: List[BaseType],
+        types: List[BaseType],
+    ):
         self._row: Union[bytes, Tuple[Any]] = row
-        if not self._row:
+        if self._row or (len(types) == 1 and isinstance(types[0], StrType)):
+            self._decoded = False
+            self._converters = converters
+            self._names = names
+        else:
             # in case of empty row
             self._decoded = True
             self._converters = []
             self._names = {}
-        else:
-            self._decoded = False
-            self._converters = converters
-            self._names = names
 
     def __getitem__(self, key: Union[str, int, slice]) -> Any:
         self._decode()
@@ -82,25 +89,23 @@ class Record(Mapping):
 
 
 class RecordsFabric:
-    __slots__ = ("converters", "names")
+    __slots__ = ("converters", "names", "types")
 
     def __init__(self, tps: bytes, names: bytes, convert: bool = True):
         names = names.decode().strip().split("\t")
         self.names = {key: index for (index, key) in enumerate(names)}
+        self.types = [what_py_type(tp) for tp in tps.decode().strip().split("\t")]
         if convert:
-            self.converters = [
-                what_py_converter(tp) for tp in tps.decode().strip().split("\t")
-            ]
+            self.converters = [type_.convert for type_ in self.types]
         else:
-            self.converters = [
-                empty_convertor for _ in tps.decode().strip().split("\t")
-            ]
+            self.converters = [empty_convertor for _ in self.types]
 
     def new(self, row: bytes) -> Record:
         return Record(
             row=row[:-1],  # because of delimiter
             names=self.names,
             converters=self.converters,
+            types=self.types,
         )
 
 

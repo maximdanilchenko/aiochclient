@@ -74,6 +74,7 @@ def rows(uuid):
             {"hello": {"inner": "world"}},
             [(1, 2), (3, 4)],
             [('hello', dt.date(2018, 9, 21)), ('world', dt.date(2018, 9, 22))],
+            "",
         ],
         [
             2,
@@ -130,6 +131,7 @@ def rows(uuid):
                 ('inner', dt.date(2018, 9, 22)),
                 ('world', dt.date(2018, 9, 23)),
             ],
+            "",
         ],
     ]
 
@@ -216,7 +218,8 @@ async def all_types_db(chclient, rows):
                             map Map(String, String),
                             map_map Map(String, Map(String, String)),
                             nested_int Nested(value1 Integer, value2 Integer),
-                            nested_str_date Nested(value1 String, value2 Date)
+                            nested_str_date Nested(value1 String, value2 Date),
+                            empty_string String,
                             ) ENGINE = Memory
     """
     )
@@ -478,6 +481,19 @@ class TestTypes:
         record = await self.select_record_bytes("string")
         assert record[0] == result
         assert record["string"] == result
+
+    async def test_empty_string(self):
+        result = ""
+        assert await self.select_field("empty_string") == result
+        record = await self.select_record("empty_string")
+        assert record[0] == result
+        assert record["empty_string"] == result
+
+        result = b""
+        assert await self.select_field_bytes("empty_string") == result
+        record = await self.select_record_bytes("empty_string")
+        assert record[0] == result
+        assert record["empty_string"] == result
 
     async def test_fixed_string(self):
         result = "hello fixed man".ljust(32, " ")
@@ -955,7 +971,7 @@ class TestFetching:
 
     async def test_show_tables_with_fetch(self):
         tables = await self.ch.fetch("SHOW TABLES")
-        assert len(tables) == 3
+        assert len(tables) == 19
         assert tables[0]._row.decode() == 'all_types'
 
     async def test_aggr_merge_tree(self):
@@ -1023,6 +1039,8 @@ class TestRecord:
         records = await self.ch.fetch(
             "SELECT uniq(array_string) FROM all_types GROUP BY array_string WITH TOTALS"
         )
+        print([dict(i) for i in records])
+        # print(records[-2])
         assert bool(records[-2]) is False
 
     async def test_len(self):
@@ -1090,15 +1108,21 @@ class TestJson:
             }
         ]
 
+    async def test_empty_string_json(self):
+        result = await self.ch.fetch(
+            "SELECT empty_string FROM all_types LIMIT 2 format JSONEachRow"
+        )
+        print(result[0])
+        assert result == [{'empty_string': ''}, {'empty_string': ''}]
+
     async def test_select_nested_json(self):
         result = await self.ch.fetch(
             "SELECT nested_int, nested_str_date FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
         )
-        assert result[0]['nested_int'] == [
-            [0, 1]
-        ]
+        print(result[0])
+        assert result[0]['nested_int'] == [{"value1": 0, "value2": 1}]
         assert result[0]['nested_str_date'] == [
-            ['hello', '2018-09-21'],
-            ['inner', '2018-09-22'],
-            ['world', '2018-09-23'],
+            {"value1": "hello", "value2": "2018-09-21"},
+            {"value1": "inner", "value2": "2018-09-22"},
+            {"value1": "world", "value2": "2018-09-23"},
         ]
