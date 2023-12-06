@@ -79,7 +79,7 @@ setup_opts = dict(
     extras_require={
         # aiohttp client
         'aiohttp': ['aiohttp>=3.8.4'],
-        'aiohttp-speedups': ['aiodns', 'cchardet', 'ciso8601>=2.3.0', 'aiohttp>=3.8.4'],
+        'aiohttp-speedups': ['aiodns', 'faust-cchardet', 'ciso8601>=2.3.0', 'aiohttp>=3.8.4'],
         # httpx client
         'httpx': ['httpx'],
         'httpx-speedups': ['ciso8601>=2.3.0', 'httpx'],
