@@ -828,7 +828,11 @@ cdef bytes unconvert_tuple(tuple value):
     return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
 cdef bytes unconvert_dict(dict value):
-    return json2ch(value, dumps=json.dumps).replace('"', "'").encode()
+    return (
+        b"{" +
+        b','.join(py2ch(key) + b':' + py2ch(val) for key, val in value.items()) +
+        b"}"
+    )
 
 cdef bytes unconvert_array(list value):
     return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
