@@ -70,8 +70,8 @@ def rows(uuid):
             IPv6Address('2001:44c8:129:2632:33:0:252:2'),
             dt.datetime(2018, 9, 21, 10, 32, 23, 999000),
             True,
-            {"hello": "world"},
-            {"hello": {"inner": "world"}},
+            {"hello": "world {' and other things"},
+            {"hello": {"inner": "world {' and other things"}},
             [(1, 2), (3, 4)],
             [('hello', dt.date(2018, 9, 21)), ('world', dt.date(2018, 9, 22))],
             "",
@@ -123,8 +123,8 @@ def rows(uuid):
             None,
             dt.datetime(2019, 1, 1, 3, 0),
             False,
-            {"hello": "world"},
-            {"hello": {"inner": "world"}},
+            {"hello": "world {'"},
+            {"hello": {"inner": "world {'"}},
             [(0, 1)],
             [
                 ('hello', dt.date(2018, 9, 21)),
@@ -613,26 +613,26 @@ class TestTypes:
         assert record["tuple"] == result
 
     async def test_map(self):
-        result = {"hello": "world"}
+        result = {"hello": "world {' and other things"}
         assert await self.select_field("map") == result
         record = await self.select_record("map")
         assert record[0] == result
         assert record["map"] == result
 
-        result = b"{'hello':'world'}"
+        result = b"{'hello':'world {\\' and other things'}"
         assert await self.select_field_bytes("map") == result
         record = await self.select_record_bytes("map")
         assert record[0] == result
         assert record["map"] == result
 
     async def test_map_map(self):
-        result = {"hello": {"inner": "world"}}
+        result = {"hello": {"inner": "world {' and other things"}}
         assert await self.select_field("map_map") == result
         record = await self.select_record("map_map")
         assert record[0] == result
         assert record["map_map"] == result
 
-        result = b"{'hello':{'inner':'world'}}"
+        result = b"{'hello':{'inner':'world {\\' and other things'}}"
         assert await self.select_field_bytes("map_map") == result
         record = await self.select_record_bytes("map_map")
         assert record[0] == result
