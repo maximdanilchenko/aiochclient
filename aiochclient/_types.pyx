@@ -60,6 +60,7 @@ DEF ARR_CLS = ']'
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_NESTED = re.compile(r"^Nested\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
@@ -590,6 +591,36 @@ cdef class ArrayType:
         return self.p_type(value.decode())
 
 
+cdef class NestedType:
+    
+    cdef:
+        str name
+        bint container
+        tuple types
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+        self.types = tuple(
+            what_py_type(i.split()[1], container=True)
+            for i in RE_NESTED.findall(name)[0].split(',')
+        )
+
+    cdef list _convert(self, str string):
+        return self.p_type(string)
+
+    cpdef list p_type(self, str string):
+        result = []
+        for val in seq_parser(string[1:-1]):
+            temp = []
+            for tp, elem in zip(self.types, seq_parser(val.strip("()"))):
+                temp.append(tp.p_type(decode(elem.encode())))
+            result.append(tuple(temp))
+        return result
+    
+    cpdef list convert(self, bytes value):
+        return self._convert(value.decode())
+
 cdef class NullableType:
 
     cdef:
@@ -766,6 +797,7 @@ cdef dict CH_TYPES_MAPPING = {
     "Decimal128": DecimalType,
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
+    "Nested": NestedType,
 }
 
 
