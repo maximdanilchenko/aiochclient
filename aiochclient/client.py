@@ -415,6 +415,53 @@ class ChClient:
         async for row in self.iterate(query, *args):
             yield row
 
+    async def insert_file(
+        self,
+        query: str,
+        filepath: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Insert file in any suppoted by ClickHouse format. Returns None.
+
+        :param str query: Clickhouse query string which include format part.
+        :param bool filepath: Relative or absolute path to the inserted file.
+        :param Optional[Dict[str, Any]] params: Params to escape inside query string.
+
+        Usage:
+
+        .. code-block:: python
+
+            await client.insert_file(
+                "INSERT INTO t FORMAT CSV",
+                'data.csv',
+            )
+            await client.insert_file(
+                "INSERT INTO t FORMAT Parquet",
+                'data.parquet',
+            )
+            await client.insert_file(
+                "INSERT INTO t FORMAT JSONEachRow",
+                'data.json',
+            )
+
+        :return: Nothing.
+        """
+        self._check_insert_file_query(query)
+        
+        query_params = self._prepare_query_params(params)
+        if query_params:
+            query = query.format(**query_params)
+
+        params = {**self.params, "query": query}
+
+        with open(filepath, 'rb') as f:
+            await self._http_client.post_no_return(
+                url=self.url,
+                params=params,
+                headers=self.headers,
+                data=f.read(),
+            )
+
     @staticmethod
     def _parse_squery(query):
         statement = sqlparse.parse(query)[0]
@@ -435,3 +482,14 @@ class ChClient:
         else:
             is_json = False
         return need_fetch, is_json, statement_type
+    
+    @staticmethod
+    def _check_insert_file_query(query: str) -> None:
+        statement = sqlparse.parse(query)[0]
+        if statement.get_type() != 'INSERT':
+            raise ChClientError('It is possible to insert file only with INSERT query')
+
+        if not statement.token_matching(
+            (lambda tk: tk.match(sqlparse.tokens.Keyword, 'FORMAT'),), 0
+        ):
+            raise ChClientError('To insert file its required to specify `FORMAT [...] in the query.')
