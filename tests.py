@@ -1094,9 +1094,9 @@ class TestJson:
         result = await self.ch.fetch(
             "SELECT nested_int, nested_str_date FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
         )
-        assert result[0]['nested_int'] == [[0, 1]]
+        assert result[0]['nested_int'] == [{'value1': 0, 'value2': 1}]
         assert result[0]['nested_str_date'] == [
-            ['hello', '2018-09-21'],
-            ['inner', '2018-09-22'],
-            ['world', '2018-09-23'],
+            {'value1': 'hello', 'value2': '2018-09-21'},
+            {'value1': 'inner', 'value2': '2018-09-22'},
+            {'value1': 'world', 'value2': '2018-09-23'},
         ]
