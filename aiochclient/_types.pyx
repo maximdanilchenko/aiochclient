@@ -67,6 +67,12 @@ RE_MAP = re.compile(r"^Map\((.*)\)$")
 RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
 
 
+cdef str remove_single_quotes(str string):
+    if string[0] == string[-1] == "'":
+        return string[1:-1]
+    return string
+
+
 cdef str decode(char* val):
     """
     Converting bytes from clickhouse with
@@ -169,7 +175,7 @@ cdef class StrType:
 
     cdef str _convert(self, str string):
         if self.container:
-            return string.strip("'")
+            return remove_single_quotes(string)
         return string
 
     cpdef str p_type(self, str string):
@@ -529,7 +535,7 @@ cdef class TupleType:
         return self._convert(value.decode())
 
 
-cdef class  MapType:
+cdef class MapType:
 
     cdef:
         str name
@@ -545,19 +551,10 @@ cdef class  MapType:
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
 
-    cdef dict _convert(self, string):
-        if isinstance(string, str):
-            string = RE_REPLACE_QUOTE.sub('"', string)
-            string = string.replace('\\', '\\\\')
-            dict_from_string = json.loads(string)
-        else:
-            dict_from_string = string
+    cdef dict _convert(self, str string):
+        key, value = string[1:-1].split(':', 1)
         return {
-            self.key_type.p_type(
-                decode(key.encode()) if isinstance(key, str) else key
-            ): self.value_type.p_type(
-                decode(val.encode()) if isinstance(val, str) else val
-            ) for key, val in dict_from_string.items()
+            self.key_type.p_type(decode(key.encode())): self.value_type.p_type(decode(value.encode()))
         }
 
     cpdef dict p_type(self, string):
