@@ -37,6 +37,12 @@ RE_MAP = re.compile(r"^Map\((.*)\)$")
 RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
 
 
+def remove_single_quotes(string: str) -> str:
+    if string[0] == string[-1] == "'":
+        return string[1:-1]
+    return string
+
+
 class BaseType(ABC):
     __slots__ = ("name", "container")
 
@@ -141,9 +147,9 @@ class BaseType(ABC):
 
 
 class StrType(BaseType):
-    def p_type(self, string: str):
+    def p_type(self, string: str) -> str:
         if self.container:
-            return string.strip("'")
+            return remove_single_quotes(string)
         return string
 
     @staticmethod
@@ -316,18 +322,12 @@ class MapType(BaseType):
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1 :], container=True)
 
-    def p_type(self, string: Any) -> dict:
-        if isinstance(string, str):
-            string = RE_REPLACE_QUOTE.sub('"', string)
-            string = string.replace('\\', '\\\\')
-            string = json.loads(string)
+    def p_type(self, string: str) -> dict[Any, Any]:
+        key, value = string[1:-1].split(':', 1)
         return {
-            self.key_type.p_type(
-                self.decode(key.encode()) if isinstance(key, str) else key
-            ): self.value_type.p_type(
-                self.decode(val.encode()) if isinstance(val, str) else val
+            self.key_type.p_type(self.decode(key.encode())): self.value_type.p_type(
+                self.decode(value.encode())
             )
-            for key, val in string.items()
         }
 
     def convert(self, value: bytes) -> dict:

@@ -74,6 +74,7 @@ def rows(uuid):
             True,
             {"hello": "world {' and other things"},
             {"hello": {"inner": "world {' and other things"}},
+            {'key1': {'key2': [uuid]}},
             [(1, 2), (3, 4)],
             [('hello', dt.date(2018, 9, 21)), ('world', dt.date(2018, 9, 22))],
         ],
@@ -126,6 +127,7 @@ def rows(uuid):
             False,
             {"hello": "world {'"},
             {"hello": {"inner": "world {'"}},
+            {'key1': {'key2': [uuid, uuid, uuid]}},
             [(0, 1)],
             [
                 ('hello', dt.date(2018, 9, 21)),
@@ -218,6 +220,7 @@ async def all_types_db(chclient, rows):
                             bool Bool,
                             map Map(String, String),
                             map_map Map(String, Map(String, String)),
+                            map_map_array_uuid Map(String, Map(String, Array(UUID))),
                             nested_int Nested(value1 Integer, value2 Integer),
                             nested_str_date Nested(value1 String, value2 Date)
                             ) ENGINE = Memory
@@ -632,6 +635,21 @@ class TestTypes:
         record = await self.select_record_bytes("map_map")
         assert record[0] == result
         assert record["map_map"] == result
+
+    async def test_map_map_array_uuid(self, uuid):
+        result = {'key1': {'key2': [uuid]}}
+        print(await self.select_field("map_map_array_uuid"))
+        assert await self.select_field("map_map_array_uuid") == result
+        record = await self.select_record("map_map_array_uuid")
+        assert record[0] == result
+        assert record["map_map_array_uuid"] == result
+
+        result = ("{'key1':{'key2':" f"['{str(uuid)}']" "}}").encode()
+        print(await self.select_field_bytes("map_map_array_uuid"))
+        assert await self.select_field_bytes("map_map_array_uuid") == result
+        record = await self.select_record_bytes("map_map_array_uuid")
+        assert record[0] == result
+        assert record["map_map_array_uuid"] == result
 
     async def test_nullable(self):
         result = 0
@@ -1101,15 +1119,23 @@ class TestJson:
             }
         ]
 
+    async def test_map_map_array_uuid_json(self, uuid):
+        result = await self.ch.fetch(
+            "SELECT map_map_array_uuid FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
+        )
+        assert result[0]['map_map_array_uuid'] == {
+            'key1': {'key2': [str(uuid), str(uuid), str(uuid)]}
+        }
+
     async def test_select_nested_json(self):
         result = await self.ch.fetch(
             "SELECT nested_int, nested_str_date FROM all_types WHERE has(nested_int.value1, 0) format JSONEachRow"
         )
-        assert result[0]['nested_int'] == [[0, 1]]
+        assert result[0]['nested_int'] == [{'value1': 0, 'value2': 1}]
         assert result[0]['nested_str_date'] == [
-            ['hello', '2018-09-21'],
-            ['inner', '2018-09-22'],
-            ['world', '2018-09-23'],
+            {'value1': 'hello', 'value2': '2018-09-21'},
+            {'value1': 'inner', 'value2': '2018-09-22'},
+            {'value1': 'world', 'value2': '2018-09-23'},
         ]
 
 

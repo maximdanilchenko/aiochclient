@@ -60,10 +60,17 @@ DEF ARR_CLS = ']'
 
 RE_TUPLE = re.compile(r"^Tuple\((.*)\)$")
 RE_ARRAY = re.compile(r"^Array\((.*)\)$")
+RE_NESTED = re.compile(r"^Nested\((.*)\)$")
 RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
 RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
+
+
+cdef str remove_single_quotes(str string):
+    if string[0] == string[-1] == "'":
+        return string[1:-1]
+    return string
 
 
 cdef str decode(char* val):
@@ -168,7 +175,7 @@ cdef class StrType:
 
     cdef str _convert(self, str string):
         if self.container:
-            return string.strip("'")
+            return remove_single_quotes(string)
         return string
 
     cpdef str p_type(self, str string):
@@ -528,7 +535,7 @@ cdef class TupleType:
         return self._convert(value.decode())
 
 
-cdef class  MapType:
+cdef class MapType:
 
     cdef:
         str name
@@ -544,19 +551,10 @@ cdef class  MapType:
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
 
-    cdef dict _convert(self, string):
-        if isinstance(string, str):
-            string = RE_REPLACE_QUOTE.sub('"', string)
-            string = string.replace('\\', '\\\\')
-            dict_from_string = json.loads(string)
-        else:
-            dict_from_string = string
+    cdef dict _convert(self, str string):
+        key, value = string[1:-1].split(':', 1)
         return {
-            self.key_type.p_type(
-                decode(key.encode()) if isinstance(key, str) else key
-            ): self.value_type.p_type(
-                decode(val.encode()) if isinstance(val, str) else val
-            ) for key, val in dict_from_string.items()
+            self.key_type.p_type(decode(key.encode())): self.value_type.p_type(decode(value.encode()))
         }
 
     cpdef dict p_type(self, string):
@@ -589,6 +587,36 @@ cdef class ArrayType:
     cpdef list convert(self, bytes value):
         return self.p_type(value.decode())
 
+
+cdef class NestedType:
+    
+    cdef:
+        str name
+        bint container
+        tuple types
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+        self.types = tuple(
+            what_py_type(i.split()[1], container=True)
+            for i in RE_NESTED.findall(name)[0].split(',')
+        )
+
+    cdef list _convert(self, str string):
+        return self.p_type(string)
+
+    cpdef list p_type(self, str string):
+        result = []
+        for val in seq_parser(string[1:-1]):
+            temp = []
+            for tp, elem in zip(self.types, seq_parser(val.strip("()"))):
+                temp.append(tp.p_type(decode(elem.encode())))
+            result.append(tuple(temp))
+        return result
+    
+    cpdef list convert(self, bytes value):
+        return self._convert(value.decode())
 
 cdef class NullableType:
 
@@ -766,6 +794,7 @@ cdef dict CH_TYPES_MAPPING = {
     "Decimal128": DecimalType,
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
+    "Nested": NestedType,
 }
 
 
