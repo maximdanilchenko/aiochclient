@@ -1151,10 +1151,11 @@ class TestInsertFile:
             f.write(data)
 
         # assert
-        await self.ch.insert_file(
-            'INSERT INTO test_insert_file FORMAT CSV',
-            'test_data.csv',
-        )
+        with open('test_data.csv', 'rb') as f:
+            await self.ch.insert_file(
+                'INSERT INTO test_insert_file FORMAT CSV',
+                f.read(),
+            )
         result = await self.ch.fetch(
             "SELECT * FROM test_insert_file FORMAT JSONEachRow"
         )
@@ -1181,10 +1182,11 @@ class TestInsertFile:
             f.write(json.dumps(data))
 
         # assert
-        await self.ch.insert_file(
-            "INSERT INTO test_insert_file FORMAT JSONEachRow",
-            "test_data.json",
-        )
+        with open('test_data.json', 'rb') as f:
+            await self.ch.insert_file(
+                "INSERT INTO test_insert_file FORMAT JSONEachRow",
+                f.read(),
+            )
         result = await self.ch.fetch("SELECT * FROM test_insert_file")
         assert [row[:] for row in result] == [
             (1, 'test', dt.date(2024, 1, 3)),
@@ -1213,10 +1215,11 @@ class TestInsertFile:
             f.write(data)
 
         # assert
-        await self.ch.insert_file(
-            "INSERT INTO test_insert_file FORMAT TabSeparated",
-            'test_data.tsv',
-        )
+        with open('test_data.tsv', 'rb') as f:
+            await self.ch.insert_file(
+                "INSERT INTO test_insert_file FORMAT TabSeparated",
+                f.read(),
+            )
         result = await self.ch.fetch("SELECT * FROM test_insert_file")
         assert [row[:] for row in result] == [
             (1, 'some test string', dt.date(2024, 1, 3)),
@@ -1234,19 +1237,21 @@ class TestInsertFile:
 
     async def test_insert_file_with_invalid_format(self):
         # setup
-        data: str = """uint32,string,date
-                        1,test,2024-01-03
-                        2,hello world,2023-03-10
-                        123,test string,2024-01-03"""
+        data: str = (
+            "uint32,string,date\n"
+            "1,test,2024-01-03\n"
+            "2,hello world,2023-03-10\n"
+            "123,test string,2024-01-03"
+        )
         with open('test_data.csv', 'w') as f:
             f.write(data)
 
         # assert
-        with pytest.raises(ChClientError):
-            await self.ch.insert_file(
-                'INSERT INTO test_insert_file FORMAT TabSeparated',
-                'test_data.csv',
-            )
-
+        with open('test_data.csv', 'rb') as f:
+            with pytest.raises(ChClientError):
+                await self.ch.insert_file(
+                    'INSERT INTO test_insert_file FORMAT TabSeparated',
+                    f.read(),
+                )
         # clean
         os.remove('test_data.csv')

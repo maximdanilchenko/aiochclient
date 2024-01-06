@@ -2,7 +2,7 @@ import json as json_
 import warnings
 from enum import Enum
 from types import TracebackType
-from typing import Any, AsyncGenerator, Dict, List, Optional, Type
+from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Optional, Type
 
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
@@ -418,49 +418,52 @@ class ChClient:
     async def insert_file(
         self,
         query: str,
-        filepath: str,
+        file_obj: BinaryIO,
         params: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Insert file in any suppoted by ClickHouse format. Returns None.
 
         :param str query: Clickhouse query string which include format part.
-        :param bool filepath: Relative or absolute path to the inserted file.
+        :param bool file_obj: File object to insert.
         :param Optional[Dict[str, Any]] params: Params to escape inside query string.
 
         Usage:
 
         .. code-block:: python
+            with open('data.csv', 'rb') as f: 
+                await client.insert_file(
+                    "INSERT INTO t FORMAT CSV",
+                    f.read(),
+                )
 
-            await client.insert_file(
-                "INSERT INTO t FORMAT CSV",
-                'data.csv',
-            )
+            with open('data.json', 'rb') as f:
+                await client.insert_file(
+                    "INSERT INTO t FORMAT JSONEachRow",
+                    f.read(),
+                )
+
+            response = requests.get("https://url_to_download_parquet_file")
             await client.insert_file(
                 "INSERT INTO t FORMAT Parquet",
-                'data.parquet',
-            )
-            await client.insert_file(
-                "INSERT INTO t FORMAT JSONEachRow",
-                'data.json',
+                response.content,
             )
 
         :return: Nothing.
         """
         self._check_insert_file_query(query)
-        
+
         query_params = self._prepare_query_params(params)
         if query_params:
             query = query.format(**query_params)
 
         params = {**self.params, "query": query}
 
-        with open(filepath, 'rb') as f:
-            await self._http_client.post_no_return(
-                url=self.url,
-                params=params,
-                headers=self.headers,
-                data=f.read(),
-            )
+        await self._http_client.post_no_return(
+            url=self.url,
+            params=params,
+            headers=self.headers,
+            data=file_obj,
+        )
 
     @staticmethod
     def _parse_squery(query):
@@ -482,7 +485,7 @@ class ChClient:
         else:
             is_json = False
         return need_fetch, is_json, statement_type
-    
+
     @staticmethod
     def _check_insert_file_query(query: str) -> None:
         statement = sqlparse.parse(query)[0]
@@ -492,4 +495,6 @@ class ChClient:
         if not statement.token_matching(
             (lambda tk: tk.match(sqlparse.tokens.Keyword, 'FORMAT'),), 0
         ):
-            raise ChClientError('To insert file its required to specify `FORMAT [...] in the query.')
+            raise ChClientError(
+                'To insert file its required to specify `FORMAT [...] in the query.'
+            )
