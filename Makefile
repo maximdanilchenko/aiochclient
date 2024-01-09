@@ -23,8 +23,8 @@ html_types:
 	cython -a aiochclient/_types.pyx
 
 docker-clickhouse:
-	docker pull yandex/clickhouse-server
-	docker start cs || docker run -p 8123:8123 -d --name cs yandex/clickhouse-server
+	docker pull clickhouse/clickhouse-server
+	docker start cs || docker run -p 8123:8123 -d --name cs clickhouse/clickhouse-server
 
 install-dev-requirements:
 	pip install twine
