@@ -1,4 +1,6 @@
 import datetime as dt
+import json
+import os
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from uuid import uuid4
@@ -167,6 +169,7 @@ async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS all_types")
     await chclient.execute("DROP TABLE IF EXISTS test_cache")
     await chclient.execute("DROP TABLE IF EXISTS test_cache_mv")
+    await chclient.execute("DROP TABLE IF EXISTS test_insert_file")
     await chclient.execute(
         """
     CREATE TABLE all_types (uint8 UInt8,
@@ -239,7 +242,15 @@ async def all_types_db(chclient, rows):
           SELECT avgState(int32), sum(float32) FROM all_types
         """
     )
-
+    await chclient.execute(
+        """
+        CREATE TABLE test_insert_file(
+            uint32  UInt32,
+            string  String,
+            date    Date
+        ) ENGINE = Memory
+        """
+    )
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
 
@@ -973,7 +984,7 @@ class TestFetching:
 
     async def test_show_tables_with_fetch(self):
         tables = await self.ch.fetch("SHOW TABLES")
-        assert len(tables) == 3
+        assert len(tables) == 4
         assert tables[0]._row.decode() == 'all_types'
 
     async def test_aggr_merge_tree(self):
@@ -1126,3 +1137,121 @@ class TestJson:
             {'value1': 'inner', 'value2': '2018-09-22'},
             {'value1': 'world', 'value2': '2018-09-23'},
         ]
+
+
+@pytest.mark.usefixtures("class_chclient")
+class TestInsertFile:
+    async def test_insert_csv_file(self):
+        # setup
+        data: str = """uint32,string,date
+                        1,test,2024-01-03
+                        2,hello world,2023-03-10
+                        123,test string,2024-01-03"""
+        with open('test_data.csv', 'w') as f:
+            f.write(data)
+
+        # assert
+        with open('test_data.csv', 'rb') as f:
+            await self.ch.insert_file(
+                'INSERT INTO test_insert_file FORMAT CSV',
+                f.read(),
+            )
+        result = await self.ch.fetch(
+            "SELECT * FROM test_insert_file FORMAT JSONEachRow"
+        )
+        print(result)
+        assert result == [
+            {'uint32': 1, 'string': 'test', 'date': '2024-01-03'},
+            {'uint32': 2, 'string': 'hello world', 'date': '2023-03-10'},
+            {'uint32': 123, 'string': 'test string', 'date': '2024-01-03'},
+        ]
+
+        # clean
+        os.remove('test_data.csv')
+
+    async def test_insert_json_file(self):
+        # setup
+        data = [
+            {"uint32": 1, "string": "test", "date": "2024-01-03"},
+            {"uint32": 2, "string": "hello world", "date": "2023-03-10"},
+            {"uint32": 3, "string": "", "date": "2018-09-21"},
+            {"uint32": 123, "string": "test string", "date": "2024-01-03"},
+        ]
+
+        with open('test_data.json', 'w') as f:
+            f.write(json.dumps(data))
+
+        # assert
+        with open('test_data.json', 'rb') as f:
+            await self.ch.insert_file(
+                "INSERT INTO test_insert_file FORMAT JSONEachRow",
+                f.read(),
+            )
+        result = await self.ch.fetch("SELECT * FROM test_insert_file")
+        assert [row[:] for row in result] == [
+            (1, 'test', dt.date(2024, 1, 3)),
+            (2, 'hello world', dt.date(2023, 3, 10)),
+            (3, '', dt.date(2018, 9, 21)),
+            (123, 'test string', dt.date(2024, 1, 3)),
+        ]
+
+        # clean
+        os.remove('test_data.json')
+
+    async def test_insert_tsv_file(self):
+        # setup
+        data = (
+            "uint32	string	date\n"
+            "1	some test string	2024-01-03\n"
+            "1	test	2024-01-03\n"
+            "1	test	2024-01-03\n"
+            "2	hello world	2023-03-10\n"
+            "2	hello world	2023-03-10\n"
+            "2	hello world	2023-03-10\n"
+            "123	other things	2023-03-10\n"
+            "123	test string	2024-01-03"
+        )
+        with open('test_data.tsv', 'w') as f:
+            f.write(data)
+
+        # assert
+        with open('test_data.tsv', 'rb') as f:
+            await self.ch.insert_file(
+                "INSERT INTO test_insert_file FORMAT TabSeparated",
+                f.read(),
+            )
+        result = await self.ch.fetch("SELECT * FROM test_insert_file")
+        assert [row[:] for row in result] == [
+            (1, 'some test string', dt.date(2024, 1, 3)),
+            (1, 'test', dt.date(2024, 1, 3)),
+            (1, 'test', dt.date(2024, 1, 3)),
+            (2, 'hello world', dt.date(2023, 3, 10)),
+            (2, 'hello world', dt.date(2023, 3, 10)),
+            (2, 'hello world', dt.date(2023, 3, 10)),
+            (123, 'other things', dt.date(2023, 3, 10)),
+            (123, 'test string', dt.date(2024, 1, 3)),
+        ]
+
+        # clean
+        os.remove('test_data.tsv')
+
+    async def test_insert_file_with_invalid_format(self):
+        # setup
+        data: str = (
+            "uint32,string,date\n"
+            "1,test,2024-01-03\n"
+            "2,hello world,2023-03-10\n"
+            "123,test string,2024-01-03"
+        )
+        with open('test_data.csv', 'w') as f:
+            f.write(data)
+
+        # assert
+        with open('test_data.csv', 'rb') as f:
+            with pytest.raises(ChClientError):
+                await self.ch.insert_file(
+                    'INSERT INTO test_insert_file FORMAT TabSeparated',
+                    f.read(),
+                )
+        # clean
+        os.remove('test_data.csv')
