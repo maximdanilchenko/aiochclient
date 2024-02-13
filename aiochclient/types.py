@@ -1,5 +1,4 @@
 import datetime as dt
-import json
 import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
@@ -322,7 +321,7 @@ class MapType(BaseType):
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1 :], container=True)
 
-    def p_type(self, string: str) -> dict[Any, Any]:
+    def p_type(self, string: str) -> dict:
         key, value = string[1:-1].split(':', 1)
         return {
             self.key_type.p_type(self.decode(key.encode())): self.value_type.p_type(
