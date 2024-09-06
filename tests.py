@@ -49,7 +49,7 @@ def rows(uuid):
             ["hello", "world"],
             ["hello", "world"],
             ["hello", None],
-            [("/tables/detect'", 3, "hello")],
+            [("hello\'", 3, "hello")],
             "'\b\f\r\n\t\\",
             uuid,
             [uuid, uuid, uuid],
@@ -681,13 +681,13 @@ class TestTypes:
         assert record["array_string"] == result
     
     async def test_array_tuple(self):
-        result = [("/tables/detect'", 3, "hello")]
+        result = [("hello'", 3, "hello")]
         assert await self.select_field("array_tuple") == result
         record = await self.select_record("array_tuple")
         assert record[0] == result
         assert record["array_tuple"] == result
 
-        result = b"[('/tables/detect\\'',3,'hello')]"
+        result = b"[('hello\\'',3,'hello')]"
         assert await self.select_field_bytes("array_tuple") == result
         record = await self.select_record_bytes("array_tuple")
         assert record[0] == result
