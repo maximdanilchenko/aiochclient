@@ -147,6 +147,7 @@ class BaseType(ABC):
 
 class StrType(BaseType):
     def p_type(self, string: str) -> str:
+        string = self.decode(string.encode())
         if self.container:
             return remove_single_quotes(string)
         return string
@@ -299,7 +300,7 @@ class TupleType(BaseType):
 
     def p_type(self, string: str) -> tuple:
         return tuple(
-            tp.p_type(self.decode(val.encode()))
+            tp.p_type(val)
             for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
         )
 
@@ -324,9 +325,8 @@ class MapType(BaseType):
     def p_type(self, string: str) -> dict:
         key, value = string[1:-1].split(':', 1)
         return {
-            self.key_type.p_type(self.decode(key.encode())): self.value_type.p_type(
-                self.decode(value.encode())
-            )
+            self.key_type.p_type(key): self.value_type.p_type(value)
+            
         }
 
     def convert(self, value: bytes) -> dict:
@@ -350,7 +350,7 @@ class ArrayType(BaseType):
 
     def p_type(self, string: str) -> list:
         return [
-            self.type.p_type(self.decode(val.encode()))
+            self.type.p_type(val)
             for val in self.seq_parser(string[1:-1])
         ]
 
@@ -375,7 +375,7 @@ class NestedType(BaseType):
     def p_type(self, string: str) -> List[tuple]:
         return [
             tuple(
-                tp.p_type(self.decode(elem.encode()))
+                tp.p_type(elem)
                 for tp, elem in zip(self.types, self.seq_parser(val.strip("()")))
             )
             for val in self.seq_parser(string[1:-1])
