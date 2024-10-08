@@ -553,7 +553,10 @@ cdef class MapType:
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
 
     cdef dict _convert(self, str string):
-        key, value = string[1:-1].split(':', 1)
+        splits = string[1:-1].split(':', 1)
+        if len(splits) < 2:
+            return {}
+        key, value = splits
         return {
             self.key_type.p_type(key): self.value_type.p_type(value)
         }
