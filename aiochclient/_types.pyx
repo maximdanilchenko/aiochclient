@@ -174,6 +174,7 @@ cdef class StrType:
         self.container = container
 
     cdef str _convert(self, str string):
+        string = decode(string.encode())
         if self.container:
             return remove_single_quotes(string)
         return string
@@ -524,7 +525,7 @@ cdef class TupleType:
 
     cdef tuple _convert(self, str string):
         return tuple(
-            tp(decode(val.encode()))
+            tp(val)
             for tp, val in zip(self.types, seq_parser(string[1:-1]))
         )
 
@@ -554,7 +555,7 @@ cdef class MapType:
     cdef dict _convert(self, str string):
         key, value = string[1:-1].split(':', 1)
         return {
-            self.key_type.p_type(decode(key.encode())): self.value_type.p_type(decode(value.encode()))
+            self.key_type.p_type(key): self.value_type.p_type(value)
         }
 
     cpdef dict p_type(self, string):
@@ -579,7 +580,7 @@ cdef class ArrayType:
         )
 
     cdef list _convert(self, str string):
-        return [self.type.p_type(decode(val.encode())) for val in seq_parser(string[1:-1])]
+        return [self.type.p_type(val) for val in seq_parser(string[1:-1])]
 
     cpdef list p_type(self, str string):
         return self._convert(string)
@@ -611,7 +612,7 @@ cdef class NestedType:
         for val in seq_parser(string[1:-1]):
             temp = []
             for tp, elem in zip(self.types, seq_parser(val.strip("()"))):
-                temp.append(tp.p_type(decode(elem.encode())))
+                temp.append(tp.p_type(elem))
             result.append(tuple(temp))
         return result
     

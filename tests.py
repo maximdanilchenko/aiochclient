@@ -49,6 +49,7 @@ def rows(uuid):
             ["hello", "world"],
             ["hello", "world"],
             ["hello", None],
+            [("hello\'", 3, "hello")],
             "'\b\f\r\n\t\\",
             uuid,
             [uuid, uuid, uuid],
@@ -102,6 +103,7 @@ def rows(uuid):
             [1, 2, 3, 4],
             (4, "hello"),
             None,
+            [],
             [],
             [],
             [],
@@ -198,6 +200,7 @@ async def all_types_db(chclient, rows):
                             array_string Array(String),
                             array_low_cardinality_string Array(LowCardinality(String)),
                             array_nullable_string Array(Nullable(String)),
+                            array_tuple Array(Tuple(String, UInt8, String)),
                             escape_string String,
                             uuid Nullable(UUID),
                             array_uuid Array(UUID),
@@ -258,7 +261,7 @@ async def all_types_db(chclient, rows):
 def class_chclient(chclient, all_types_db, rows, request):
     request.cls.ch = chclient
     cls_rows = rows
-    cls_rows[1][44] = dt.datetime(
+    cls_rows[1][45] = dt.datetime(
         2019, 1, 1, 3, 0
     )  # DateTime64 always returns datetime type
     request.cls.rows = [tuple(r) for r in cls_rows]
@@ -676,6 +679,19 @@ class TestTypes:
         record = await self.select_record_bytes("array_string")
         assert record[0] == result
         assert record["array_string"] == result
+    
+    async def test_array_tuple(self):
+        result = [("hello'", 3, "hello")]
+        assert await self.select_field("array_tuple") == result
+        record = await self.select_record("array_tuple")
+        assert record[0] == result
+        assert record["array_tuple"] == result
+
+        result = b"[('hello\\'',3,'hello')]"
+        assert await self.select_field_bytes("array_tuple") == result
+        record = await self.select_record_bytes("array_tuple")
+        assert record[0] == result
+        assert record["array_tuple"] == result
 
     async def test_array_low_cardinality_string(self):
         result = ["hello", "world"]
