@@ -65,7 +65,7 @@ RE_NULLABLE = re.compile(r"^Nullable\((.*)\)$")
 RE_LOW_CARDINALITY = re.compile(r"^LowCardinality\((.*)\)$")
 RE_MAP = re.compile(r"^Map\((.*)\)$")
 RE_REPLACE_QUOTE = re.compile(r"(?<!\\)'")
-
+RE_SIMPLE_AGG = re.compile(r"^SimpleAggregateFunction\([^,]+,\s*(.+)\)$")
 
 cdef str remove_single_quotes(str string):
     if string[0] == string[-1] == "'":
@@ -172,6 +172,8 @@ cdef class StrType:
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
+        inner_type_str = RE_SIMPLE_AGG.findall(name)[0]
+        self.inner_type = what_py_type(inner_type_str, container=False)
 
     cdef str _convert(self, str string):
         string = decode(string.encode())
@@ -758,6 +760,27 @@ cdef class DecimalType:
     cpdef object convert(self, bytes value):
         return Decimal(value.decode())
 
+cdef class SimpleAggregateFunctionType:
+    cdef:
+        str name
+        bint container
+        object inner_type
+
+    def __cinit__(self, str name, bint container):
+        self.name = name
+        self.container = container
+        inner_type_str = RE_SIMPLE_AGG.findall(name)[0]
+        self.inner_type = what_py_type(inner_type_str, container=False)
+
+    cdef object _convert(self, str string):
+        return self.inner_type.p_type(string)
+
+    cpdef object p_type(self, str string):
+        return self._convert(string)
+
+    cpdef object convert(self, bytes value):
+        return self._convert(decode(value))
+
 
 cdef dict CH_TYPES_MAPPING = {
     "Bool": BoolType,
@@ -796,6 +819,7 @@ cdef dict CH_TYPES_MAPPING = {
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
     "Nested": NestedType,
+    "SimpleAggregateFunction": SimpleAggregateFunctionType,
 }
 
 
@@ -803,14 +827,15 @@ cdef what_py_type(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
-        if name.startswith('SimpleAggregateFunction') or name.startswith('AggregateFunction'):
+        if name.startswith('SimpleAggregateFunction'):
+            return SimpleAggregateFunctionType(name, container=container)
+        elif name.startswith('AggregateFunction'):
             ch_type = re.findall(r',(.*)\)', name)[0].strip()
         else:
             ch_type = name.split("(")[0]
         return CH_TYPES_MAPPING[ch_type](name, container=container)
     except KeyError:
         raise ChClientError(f"Unrecognized type name: '{name}'")
-
 
 cpdef what_py_converter(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
