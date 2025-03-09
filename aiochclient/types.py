@@ -272,7 +272,7 @@ class IPv4Type(BaseType):
         return self.p_type(value.decode())
 
     @staticmethod
-    def unconvert(value: UUID) -> bytes:
+    def unconvert(value: IPv4Address) -> bytes:
         return b"%a" % str(value)
 
 
@@ -284,7 +284,7 @@ class IPv6Type(BaseType):
         return self.p_type(value.decode())
 
     @staticmethod
-    def unconvert(value: UUID) -> bytes:
+    def unconvert(value: IPv6Address) -> bytes:
         return b"%a" % str(value)
 
 
@@ -323,14 +323,27 @@ class MapType(BaseType):
         self.value_type = what_py_type(tps[comma_index + 1 :], container=True)
 
     def p_type(self, string: str) -> dict:
-        key, value = string[1:-1].split(':', 1)
-        return {
-            self.key_type.p_type(key): self.value_type.p_type(value)
-            
-        }
+        """Parse a TSV-encoded Map string into a dictionary."""
+        # Remove surrounding brackets or quotes if present
+        string = string.strip("[]'\"")
+        if not string:
+            return {}
+
+        # Split by tabs (TSV format for Map in ClickHouse)
+        parts = string.split('\t')
+        if len(parts) % 2 != 0:
+            raise ChClientError(f"Invalid Map TSV format: {string}")
+
+        # Convert pairs into a dictionary
+        result = {}
+        for i in range(0, len(parts), 2):
+            key = self.key_type.p_type(parts[i])
+            value = self.value_type.p_type(parts[i + 1])
+            result[key] = value
+        return result
 
     def convert(self, value: bytes) -> dict:
-        return self.p_type(value.decode())
+        return self.p_type(self.decode(value))
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -349,10 +362,7 @@ class ArrayType(BaseType):
         self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
-        return [
-            self.type.p_type(val)
-            for val in self.seq_parser(string[1:-1])
-        ]
+        return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
 
     def convert(self, value: bytes) -> list:
         return self.p_type(value.decode())
