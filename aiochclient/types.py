@@ -284,7 +284,7 @@ class IPv6Type(BaseType):
         return self.p_type(value.decode())
 
     @staticmethod
-    def unconvert(value: IPv6Address) -> bytes:
+    def unconvert(value: UUID) -> bytes:
         return b"%a" % str(value)
 
 
