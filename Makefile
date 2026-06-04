@@ -24,7 +24,13 @@ html_types:
 
 docker-clickhouse:
 	docker pull clickhouse/clickhouse-server
-	docker start cs || docker run -p 8123:8123 -d --name cs clickhouse/clickhouse-server
+	docker start cs 2>/dev/null || docker run -p 8123:8123 -d --name cs -e CLICKHOUSE_SKIP_USER_SETUP=1 clickhouse/clickhouse-server
+	@echo "Waiting for ClickHouse to become ready..."
+	@for i in $$(seq 1 60); do \
+		if curl -fs http://localhost:8123/ping | grep -q Ok; then echo "ClickHouse is ready"; exit 0; fi; \
+		sleep 1; \
+	done; \
+	echo "ClickHouse did not become ready in time" && exit 1
 
 install-dev-requirements:
 	pip install twine
