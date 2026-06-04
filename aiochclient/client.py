@@ -54,7 +54,7 @@ class ChClient:
         They will be decompressed automatically. But overall it will be slightly slower.
 
     :param \\*\\*settings:
-        Any settings from https://clickhouse.yandex/docs/en/operations/settings
+        Any settings from https://clickhouse.com/docs/en/operations/settings/settings
     """
 
     __slots__ = ("_session", "url", "params", "headers", "_json", "_http_client")

@@ -44,8 +44,8 @@ Or `aiochclient[httpx-speedups]` to install with extra speedups.
 
 Installing with `[*-speedups]` adds the following:
 
-- [cChardet](https://pypi.python.org/pypi/cchardet) for `aiohttp` speedup
-- [aiodns](https://pypi.python.org/pypi/aiodns) for `aiohttp` speedup
+- [faust-cchardet](https://pypi.org/project/faust-cchardet/) for `aiohttp` speedup
+- [aiodns](https://pypi.org/project/aiodns/) for `aiohttp` speedup
 - [ciso8601](https://github.com/closeio/ciso8601) for ultra-fast datetime
   parsing while decoding data from ClickHouse for `aiohttp` and `httpx`.
 
