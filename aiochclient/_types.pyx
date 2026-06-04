@@ -52,6 +52,7 @@ __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch"]
 
 DEF DQ = "'"
 DEF CM = ","
+DEF COLON = ':'
 DEF ESCAPE_OP = '\\'
 DEF TUP_OP = '('
 DEF TUP_CLS = ')'
@@ -128,39 +129,61 @@ cdef str decode(char* val):
 
 cdef list seq_parser(str raw):
     """
-    Function for parsing tuples and arrays
+    Parse the body of tuples, arrays and maps into the top-level,
+    comma-separated elements, keeping quoted strings and nested brackets
+    intact, so structural characters (``,``, ``(``, ``)``, ``[``, ``]``)
+    inside a quoted string are not treated as separators.
     """
     cdef:
         list res = [], cur = []
-        bint in_str = False, in_arr = False, in_tup = False, escape_char = False
+        Py_ssize_t depth = 0
+        bint in_str = False, escape_char = False
     if not raw:
         return res
     for sym in raw:
-        if not (in_str or in_arr or in_tup):
-            if sym == CM:
-                PyList_Append(res, PyUnicode_Join("", cur))
-                del cur[:]
-                continue
+        if in_str:
+            PyList_Append(cur, sym)
+            if escape_char:
+                escape_char = False
+            elif sym == ESCAPE_OP:
+                escape_char = True
             elif sym == DQ:
-                in_str = not in_str
-            elif sym == ARR_OP:
-                in_arr = True
-            elif sym == TUP_OP:
-                in_tup = True
-        elif in_str and sym == DQ:
-            if not escape_char:
-                in_str = not in_str
-        elif in_arr and sym == ARR_CLS:
-            in_arr = False
-        elif in_tup and sym == TUP_CLS:
-            in_tup = False
-        if in_str and sym == ESCAPE_OP:
-            escape_char = not escape_char
-        else:
-            escape_char = False
+                in_str = False
+            continue
+        if sym == DQ:
+            in_str = True
+        elif sym == ARR_OP or sym == TUP_OP:
+            depth += 1
+        elif sym == ARR_CLS or sym == TUP_CLS:
+            depth -= 1
+        elif sym == CM and depth == 0:
+            PyList_Append(res, PyUnicode_Join("", cur))
+            del cur[:]
+            continue
         PyList_Append(cur, sym)
     PyList_Append(res, PyUnicode_Join("", cur))
     return res
+
+
+cdef tuple _split_map_kv(str pair):
+    """Split a ``key:value`` map entry at its first top-level colon."""
+    cdef:
+        Py_ssize_t i = 0
+        bint in_str = False, escape_char = False
+    for sym in pair:
+        if in_str:
+            if escape_char:
+                escape_char = False
+            elif sym == ESCAPE_OP:
+                escape_char = True
+            elif sym == DQ:
+                in_str = False
+        elif sym == DQ:
+            in_str = True
+        elif sym == COLON:
+            return pair[:i], pair[i + 1:]
+        i += 1
+    return pair, ""
 
 
 cdef class StrType:
@@ -557,10 +580,13 @@ cdef class MapType:
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
 
     cdef dict _convert(self, str string):
-        key, value = string[1:-1].split(':', 1)
-        return {
-            self.key_type.p_type(key): self.value_type.p_type(value)
-        }
+        cdef:
+            dict result = {}
+            str pair, key, value
+        for pair in seq_parser(string[1:-1]):
+            key, value = _split_map_kv(pair)
+            result[self.key_type.p_type(key)] = self.value_type.p_type(value)
+        return result
 
     cpdef dict p_type(self, string):
         return self._convert(string)

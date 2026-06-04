@@ -51,7 +51,11 @@ class HttpxHttpClient(HttpClientABC):
 
 async def _check_response(resp):
     if resp.status_code != 200:
-        raise ChClientError(await _read_error_body(resp))
+        body = await _read_error_body(resp)
+        raise ChClientError(
+            body.strip()
+            or f"Received error response with status code {resp.status_code} and empty body"
+        )
 
 
 async def _read_error_body(resp: Response):
