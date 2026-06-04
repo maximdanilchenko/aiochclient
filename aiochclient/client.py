@@ -53,7 +53,7 @@ class ChClient:
         Pass True if you want Clickhouse to compress its responses with gzip.
         They will be decompressed automatically. But overall it will be slightly slower.
 
-    :param **settings:
+    :param \\*\\*settings:
         Any settings from https://clickhouse.yandex/docs/en/operations/settings
     """
 
@@ -430,7 +430,8 @@ class ChClient:
         Usage:
 
         .. code-block:: python
-            with open('data.csv', 'rb') as f: 
+
+            with open('data.csv', 'rb') as f:
                 await client.insert_file(
                     "INSERT INTO t FORMAT CSV",
                     f.read(),
