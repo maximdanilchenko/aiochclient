@@ -847,7 +847,7 @@ cpdef what_py_converter(str name, bint container = False):
     return what_py_type(name, container).convert
 
 
-cdef bytes unconvert_str(str value):
+cdef bytes unconvert_str(object value):
     cdef:
         list res = ["'"]
         int i, sl = len(value)
@@ -884,17 +884,17 @@ cdef bytes unconvert_datetime(object value):
     return f"'{value}'".encode('latin-1')
 
 
-cdef bytes unconvert_tuple(tuple value):
+cdef bytes unconvert_tuple(object value):
     return b"(" + b",".join(py2ch(elem) for elem in value) + b")"
 
-cdef bytes unconvert_dict(dict value):
+cdef bytes unconvert_dict(object value):
     return (
         b"{" +
         b','.join(py2ch(key) + b':' + py2ch(val) for key, val in value.items()) +
         b"}"
     )
 
-cdef bytes unconvert_array(list value):
+cdef bytes unconvert_array(object value):
     return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
@@ -933,15 +933,24 @@ cdef dict PY_TYPES_MAPPING = {
 
 
 cpdef bytes py2ch(value):
-    try:
-        return PY_TYPES_MAPPING[type(value)](value)
-    except KeyError:
+    converter = PY_TYPES_MAPPING.get(type(value))
+    if converter is None:
+        # Fall back to the closest registered base type, walking the MRO so
+        # the most specific match wins (e.g. datetime before date). This lets
+        # subclasses of supported types — StrEnum/IntEnum, namedtuples, etc. —
+        # be inserted too.
+        for base in type(value).__mro__:
+            converter = PY_TYPES_MAPPING.get(base)
+            if converter is not None:
+                break
+    if converter is None:
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
-            f"The value type should be exactly one of "
-            f"int, float, str, dt.date, dt.datetime, dict, tuple, list, uuid.UUID (or None). "
-            f"No subclasses yet."
+            f"The value type should be one of "
+            f"int, float, str, dt.date, dt.datetime, dict, tuple, list, uuid.UUID "
+            f"(or a subclass of one of them, or None)."
         )
+    return converter(value)
 
 def rows2ch(*rows):
     return b",".join(unconvert_tuple(tuple(row)) for row in rows)

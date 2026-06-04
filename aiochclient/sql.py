@@ -34,7 +34,7 @@ SQLPARSE_LEXER.clear()
 SQLPARSE_LEXER.set_SQL_REGEX(
     [
         (r'(FORMAT)\b', sqlparse.tokens.Keyword),
-        (r'(DESCRIBE|SHOW|EXISTS)\b', sqlparse.tokens.Keyword.DML),
+        (r'(DESCRIBE|SHOW|EXISTS|EXPLAIN)\b', sqlparse.tokens.Keyword.DML),
         *sqlparse.keywords.SQL_REGEX,
     ]
 )
@@ -48,5 +48,6 @@ SQLPARSE_LEXER.add_keywords(
         'EXISTS': tokens.Keyword.DML,
         'DESCRIBE': tokens.Keyword.DML,
         'SHOW': tokens.Keyword.DML,
+        'EXPLAIN': tokens.Keyword.DML,
     }
 )

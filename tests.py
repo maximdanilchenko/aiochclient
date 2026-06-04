@@ -2,6 +2,7 @@ import datetime as dt
 import json
 import os
 from decimal import Decimal
+from enum import Enum, IntEnum
 from ipaddress import IPv4Address, IPv6Address
 from uuid import uuid4
 
@@ -966,6 +967,26 @@ class TestTypes:
         assert await self.ch.fetchval("SELECT m FROM t_issue_117") == {}
         await self.ch.execute("DROP TABLE IF EXISTS t_issue_117")
 
+    async def test_insert_subtypes(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/97
+        # Subclasses of supported types (e.g. str/int Enums) must be accepted.
+        class Color(str, Enum):
+            RED = "red"
+
+        class Level(IntEnum):
+            HIGH = 5
+
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_97")
+        await self.ch.execute(
+            "CREATE TABLE t_issue_97 (s String, n UInt8) ENGINE = Memory"
+        )
+        await self.ch.execute("INSERT INTO t_issue_97 VALUES", (Color.RED, Level.HIGH))
+        assert await self.ch.fetchrow("SELECT s, n FROM t_issue_97") == {
+            "s": "red",
+            "n": 5,
+        }
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_97")
+
 
 @pytest.mark.fetching
 @pytest.mark.usefixtures("class_chclient")
@@ -1062,6 +1083,15 @@ class TestFetching:
     async def test_exists_table(self):
         exists = await self.ch.fetchrow("EXISTS TABLE all_types")
         assert exists == {'result': 1}
+
+    async def test_explain_with_fetch(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/98
+        rows = await self.ch.fetch("EXPLAIN SELECT 1")
+        assert rows
+        assert all(isinstance(row[0], str) for row in rows)
+
+        value = await self.ch.fetchval("EXPLAIN SYNTAX SELECT 1 + 1")
+        assert value == "SELECT 1 + 1"
 
     async def test_quoted_string(self):
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")

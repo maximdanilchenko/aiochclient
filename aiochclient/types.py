@@ -549,16 +549,24 @@ def what_py_converter(name: str, container: bool = False) -> Callable:
 
 
 def py2ch(value):
-    try:
-        return PY_TYPES_MAPPING[type(value)](value)
-    except KeyError:
+    converter = PY_TYPES_MAPPING.get(type(value))
+    if converter is None:
+        # Fall back to the closest registered base type, walking the MRO so
+        # the most specific match wins (e.g. datetime before date). This lets
+        # subclasses of supported types — StrEnum/IntEnum, namedtuples, etc. —
+        # be inserted too.
+        for base in type(value).__mro__:
+            converter = PY_TYPES_MAPPING.get(base)
+            if converter is not None:
+                break
+    if converter is None:
         raise ChClientError(
             f"Unrecognized type: '{type(value)}'. "
-            f"The value type should be exactly one of "
+            f"The value type should be one of "
             f"int, float, str, dt.date, dt.datetime, "
-            f"dict, tuple, list, uuid.UUID (or None). "
-            f"No subclasses yet."
+            f"dict, tuple, list, uuid.UUID (or a subclass of one of them, or None)."
         )
+    return converter(value)
 
 
 def rows2ch(*rows):

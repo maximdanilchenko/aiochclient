@@ -469,7 +469,7 @@ class ChClient:
     def _parse_squery(query):
         statement = sqlparse.parse(query)[0]
         statement_type = statement.get_type()
-        if statement_type in ('SELECT', 'SHOW', 'DESCRIBE', 'EXISTS'):
+        if statement_type in ('SELECT', 'SHOW', 'DESCRIBE', 'EXISTS', 'EXPLAIN'):
             need_fetch = True
         else:
             need_fetch = False
