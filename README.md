@@ -7,7 +7,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
 
-An async http(s) ClickHouse client for python 3.6+ supporting type
+An async http(s) ClickHouse client for python 3.10+ supporting type
 conversion in both directions, streaming, lazy decoding on select queries, and a
 fully typed interface.
 

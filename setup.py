@@ -1,7 +1,6 @@
-from distutils.command.build_ext import build_ext
-from distutils.errors import CCompilerError, DistutilsExecError, DistutilsPlatformError
-
 from setuptools import Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+from setuptools.errors import CCompilerError, ExecError, PlatformError
 
 try:
     from Cython.Build import cythonize
@@ -30,13 +29,13 @@ class ve_build_ext(build_ext):
     def run(self):
         try:
             build_ext.run(self)
-        except (DistutilsPlatformError, FileNotFoundError):
+        except (PlatformError, FileNotFoundError):
             raise BuildFailed()
 
     def build_extension(self, ext):
         try:
             build_ext.build_extension(self, ext)
-        except (CCompilerError, DistutilsExecError, DistutilsPlatformError, ValueError):
+        except (CCompilerError, ExecError, PlatformError, ValueError):
             raise BuildFailed()
 
 
@@ -49,7 +48,7 @@ def read(fname):
 setup_opts = dict(
     name='aiochclient',
     version='2.6.0',
-    description='Async http clickhouse client for python 3.6+',
+    description='Async http clickhouse client for python 3.10+',
     long_description=read('README.md'),
     long_description_content_type="text/markdown",
     author='Danilchenko Maksim',
@@ -58,6 +57,7 @@ setup_opts = dict(
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
     install_requires=['sqlparse>=0.4.4'],
+    python_requires='>=3.10',
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
@@ -67,12 +67,10 @@ setup_opts = dict(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
     ],
     test_suite='tests',
     ext_modules=extensions,

@@ -1,2 +1,4 @@
 -r dev-requirements-ciso.txt
 cython
+setuptools
+wheel

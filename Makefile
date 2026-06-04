@@ -14,7 +14,7 @@ upload: build_cython
 
 check_format:
 	isort --check --diff
-	black . --check --diff --target-version py36
+	black . --check --diff --target-version py310
 
 build_cython:
 	python setup.py build_ext --inplace
