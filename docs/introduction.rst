@@ -50,7 +50,7 @@ and check ClickHouse is alive. Here's how you would do that:
     if __name__ == '__main__':
         asyncio.run(main())
 
-This automatically queries a instance of ClickHouse on `localhost:8123` with the
+This automatically queries an instance of ClickHouse on `localhost:8123` with the
 default user. You may want to set up a different connection to test. To do that,
 change the following line::
 
