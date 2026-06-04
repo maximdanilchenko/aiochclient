@@ -916,6 +916,56 @@ class TestTypes:
         assert round(result[0]) == 1
         assert round(result[1]) == 2
 
+    async def test_array_tuple_with_special_chars_in_string(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/123
+        # A string element containing structural characters (parens, comma,
+        # quote) must not confuse the tuple/array parser.
+        value = [
+            ("key1", "value1"),
+            ("key2", "an invalid pair(with some parens) and this, let's see"),
+        ]
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_123")
+        await self.ch.execute(
+            "CREATE TABLE t_issue_123 (a Array(Tuple(String, String))) ENGINE = Memory"
+        )
+        await self.ch.execute("INSERT INTO t_issue_123 VALUES", [value])
+        assert await self.ch.fetchval("SELECT a FROM t_issue_123") == value
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_123")
+
+    async def test_map_with_multiple_entries(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/118
+        value = {"a": 1, "b": 2, "c": 3}
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_118")
+        await self.ch.execute(
+            "CREATE TABLE t_issue_118 (m Map(String, UInt64)) ENGINE = Memory"
+        )
+        await self.ch.execute("INSERT INTO t_issue_118 VALUES", [value])
+        assert await self.ch.fetchval("SELECT m FROM t_issue_118") == value
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_118")
+
+    async def test_map_with_separators_in_string_values(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/118
+        # Commas and colons inside string keys/values must not be treated
+        # as map separators.
+        value = {"k,1": "a,b:c", "k:2": "plain"}
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_118_sep")
+        await self.ch.execute(
+            "CREATE TABLE t_issue_118_sep (m Map(String, String)) ENGINE = Memory"
+        )
+        await self.ch.execute("INSERT INTO t_issue_118_sep VALUES", [value])
+        assert await self.ch.fetchval("SELECT m FROM t_issue_118_sep") == value
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_118_sep")
+
+    async def test_empty_map(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/117
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_117")
+        await self.ch.execute(
+            "CREATE TABLE t_issue_117 (m Map(String, UInt64)) ENGINE = Memory"
+        )
+        await self.ch.execute("INSERT INTO t_issue_117 VALUES", [{}])
+        assert await self.ch.fetchval("SELECT m FROM t_issue_117") == {}
+        await self.ch.execute("DROP TABLE IF EXISTS t_issue_117")
+
 
 @pytest.mark.fetching
 @pytest.mark.usefixtures("class_chclient")
@@ -1272,3 +1322,36 @@ class TestInsertFile:
                 )
         # clean
         os.remove('test_data.csv')
+
+
+class TestErrorBody:
+    # https://github.com/maximdanilchenko/aiochclient/issues/126
+    # A non-200 response with an empty body must still raise a ChClientError
+    # carrying a non-empty message.
+    async def test_aiohttp_empty_error_body(self):
+        from aiochclient.http_clients import aiohttp as aiohttp_client
+
+        class _FakeResp:
+            status = 500
+
+            async def read(self):
+                return b""
+
+        with pytest.raises(ChClientError) as exc:
+            await aiohttp_client._check_response(_FakeResp())
+        assert str(exc.value).strip()
+        assert "500" in str(exc.value)
+
+    async def test_httpx_empty_error_body(self):
+        from aiochclient.http_clients import httpx as httpx_client
+
+        class _FakeResp:
+            status_code = 502
+
+            async def aread(self):
+                return b"   "
+
+        with pytest.raises(ChClientError) as exc:
+            await httpx_client._check_response(_FakeResp())
+        assert str(exc.value).strip()
+        assert "502" in str(exc.value)

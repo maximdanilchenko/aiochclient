@@ -3,7 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
-from typing import Any, Callable, Generator, List, Optional
+from typing import Any, Callable, Generator, List, Optional, Tuple
 from uuid import UUID
 
 from aiochclient.exceptions import ChClientError
@@ -101,39 +101,39 @@ class BaseType(ABC):
     @classmethod
     def seq_parser(cls, raw: str) -> Generator[str, None, None]:
         """
-        Generator for parsing tuples and arrays.
-        Returns elements one by one
+        Generator for parsing the body of tuples, arrays and maps.
+
+        Yields the top-level comma-separated elements one by one, keeping
+        quoted strings and nested brackets intact, so structural characters
+        like ``,``, ``(``, ``)``, ``[`` or ``]`` inside a quoted string are
+        not treated as separators.
         """
         if not raw:
-            return None
+            return
         cur = []
+        depth = 0
         in_str = False
-        in_arr = False
-        in_tup = False
         escape_char = False
         for sym in raw:
-            if not (in_str or in_arr or in_tup):
-                if sym == cls.CM:
-                    yield "".join(cur)
-                    cur.clear()
-                    continue
+            if in_str:
+                cur.append(sym)
+                if escape_char:
+                    escape_char = False
+                elif sym == cls.ESCAPE_OP:
+                    escape_char = True
                 elif sym == cls.DQ:
-                    in_str = not in_str
-                elif sym == cls.ARR_OP:
-                    in_arr = True
-                elif sym == cls.TUP_OP:
-                    in_tup = True
-            elif in_str and sym == cls.DQ:
-                if not escape_char:
-                    in_str = not in_str
-            elif in_arr and sym == cls.ARR_CLS:
-                in_arr = False
-            elif in_tup and sym == cls.TUP_CLS:
-                in_tup = False
-            if in_str and sym == cls.ESCAPE_OP:
-                escape_char = not escape_char
-            else:
-                escape_char = False
+                    in_str = False
+                continue
+            if sym == cls.DQ:
+                in_str = True
+            elif sym == cls.ARR_OP or sym == cls.TUP_OP:
+                depth += 1
+            elif sym == cls.ARR_CLS or sym == cls.TUP_CLS:
+                depth -= 1
+            elif sym == cls.CM and depth == 0:
+                yield "".join(cur)
+                cur.clear()
+                continue
             cur.append(sym)
         yield "".join(cur)
 
@@ -330,11 +330,30 @@ class MapType(BaseType):
         self.value_type = what_py_type(tps[comma_index + 1 :], container=True)
 
     def p_type(self, string: str) -> dict:
-        key, value = string[1:-1].split(':', 1)
-        return {
-            self.key_type.p_type(key): self.value_type.p_type(value)
-            
-        }
+        result = {}
+        for pair in self.seq_parser(string[1:-1]):
+            key, value = self._split_kv(pair)
+            result[self.key_type.p_type(key)] = self.value_type.p_type(value)
+        return result
+
+    @staticmethod
+    def _split_kv(pair: str) -> Tuple[str, str]:
+        """Split a ``key:value`` map entry at its first top-level colon."""
+        in_str = False
+        escape_char = False
+        for i, sym in enumerate(pair):
+            if in_str:
+                if escape_char:
+                    escape_char = False
+                elif sym == "\\":
+                    escape_char = True
+                elif sym == "'":
+                    in_str = False
+            elif sym == "'":
+                in_str = True
+            elif sym == ":":
+                return pair[:i], pair[i + 1 :]
+        return pair, ""
 
     def convert(self, value: bytes) -> dict:
         return self.p_type(value.decode())
