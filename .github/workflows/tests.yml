@@ -1,11 +1,12 @@
 name: Tests
-on: [push]
+on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         requirements: [
           "dev-requirements/dev-requirements.txt",
           "dev-requirements/dev-requirements-ciso.txt",
@@ -15,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Display Python version
@@ -24,6 +25,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r ${{ matrix.requirements }}
+      - name: Build Cython extension
+        if: contains(matrix.requirements, 'cython')
+        run: python setup.py build_ext --inplace
+      - name: Start ClickHouse
+        run: make docker-clickhouse
       - name: Run tests
-        run: |
-          make test
+        run: pytest tests.py --cov aiochclient -vv

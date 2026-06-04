@@ -242,7 +242,8 @@ async def all_types_db(chclient, rows):
     await chclient.execute(
         """
         CREATE MATERIALIZED VIEW test_cache_mv TO test_cache AS
-          SELECT avgState(int32), sum(float32) FROM all_types
+          SELECT avgState(int32) AS int32Cache, sum(float32) AS float32Cache
+          FROM all_types
         """
     )
     await chclient.execute(

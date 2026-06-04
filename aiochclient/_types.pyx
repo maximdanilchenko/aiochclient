@@ -183,7 +183,11 @@ cdef class StrType:
         return self._convert(string)
 
     cpdef str convert(self, bytes value):
-        return self._convert(decode(value))
+        # ``value`` is the raw, still backslash-escaped bytes from ClickHouse.
+        # ``_convert`` does the (single) escape-decoding, so we only utf-8 decode
+        # here — decoding twice would re-interpret escape sequences and, for
+        # example, turn a literal ``\t`` into a tab or drop a trailing backslash.
+        return self._convert(value.decode())
 
 
 cdef class BoolType:

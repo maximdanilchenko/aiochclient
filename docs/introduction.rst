@@ -3,7 +3,7 @@
 Introduction
 ============
 
-`aiochclient` is an async http(s) ClickHouse client for python 3.6+ supporting
+`aiochclient` is an async http(s) ClickHouse client for python 3.10+ supporting
 type conversion in both directions, streaming, lazy decoding on select queries,
 and a fully typed interface.
 
@@ -14,7 +14,7 @@ Requirements
 
 `aiochclient` works on Linux, OSX, and Windows.
 
-It requires Python >= 3.6 due to the use of types.
+It requires Python >= 3.10 due to the use of types.
 
 Installation
 ------------

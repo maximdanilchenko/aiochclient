@@ -1,2 +1,4 @@
 -r dev-requirements.txt
 cython
+setuptools
+wheel

@@ -1,21 +1,27 @@
 name: Codecov
-on: [push]
+on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r dev-requirements/dev-requirements.txt
+          pip install -r dev-requirements/dev-requirements-cython-ciso.txt
+      - name: Build Cython extension
+        run: python setup.py build_ext --inplace
+      - name: Start ClickHouse
+        run: make docker-clickhouse
       - name: Run tests
-        run: |
-          make test
-      - name: Run codecov
-        run: |
-          codecov
+        run: pytest tests.py --cov aiochclient --cov-report=xml -vv
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false

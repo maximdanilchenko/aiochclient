@@ -152,6 +152,13 @@ class StrType(BaseType):
             return remove_single_quotes(string)
         return string
 
+    def convert(self, value: bytes) -> str:
+        # ``value`` is the raw, still backslash-escaped bytes from ClickHouse.
+        # ``p_type`` does the (single) escape-decoding, so we only utf-8 decode
+        # here — decoding twice would re-interpret escape sequences and, for
+        # example, turn a literal ``\t`` into a tab or drop a trailing backslash.
+        return self.p_type(value.decode())
+
     @staticmethod
     def unconvert(value: str) -> bytes:
         value = value.replace("\\", "\\\\").replace("'", "\\'")
