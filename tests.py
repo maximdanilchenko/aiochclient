@@ -905,6 +905,51 @@ class TestTypes:
         assert record[0] == result, record
         assert record["datetime64"] == result, record
 
+    async def test_datetime64_nanoseconds(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/91
+        # https://github.com/maximdanilchenko/aiochclient/issues/127
+        # DateTime64(9) carries nanoseconds, but Python datetime only supports
+        # microseconds — the fractional part is truncated to 6 digits, and
+        # consistently so with or without ciso8601 installed.
+        await self.ch.execute("DROP TABLE IF EXISTS dt64_ns")
+        await self.ch.execute("CREATE TABLE dt64_ns (d DateTime64(9)) ENGINE = Memory")
+        await self.ch.execute(
+            "INSERT INTO dt64_ns VALUES ('2024-06-24 19:42:52.123456789')"
+        )
+        assert await self.ch.fetchval("SELECT d FROM dt64_ns") == dt.datetime(
+            2024, 6, 24, 19, 42, 52, 123456
+        )
+        await self.ch.execute("DROP TABLE IF EXISTS dt64_ns")
+
+    async def test_insert_datetime_with_microseconds(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/119
+        # A datetime carrying microseconds inserts into a DateTime column (the
+        # server truncates to second precision) ...
+        await self.ch.execute("DROP TABLE IF EXISTS dt_micro")
+        await self.ch.execute("CREATE TABLE dt_micro (d DateTime) ENGINE = Memory")
+        await self.ch.execute(
+            "INSERT INTO dt_micro VALUES",
+            (dt.datetime(2024, 6, 24, 19, 42, 52, 607030),),
+        )
+        assert await self.ch.fetchval("SELECT d FROM dt_micro") == dt.datetime(
+            2024, 6, 24, 19, 42, 52
+        )
+        # ... and the same value keeps its sub-second part in a DateTime64
+        # column — which is why the client always sends the microseconds.
+        await self.ch.execute("DROP TABLE IF EXISTS dt64_micro")
+        await self.ch.execute(
+            "CREATE TABLE dt64_micro (d DateTime64(6)) ENGINE = Memory"
+        )
+        await self.ch.execute(
+            "INSERT INTO dt64_micro VALUES",
+            (dt.datetime(2024, 6, 24, 19, 42, 52, 607030),),
+        )
+        assert await self.ch.fetchval("SELECT d FROM dt64_micro") == dt.datetime(
+            2024, 6, 24, 19, 42, 52, 607030
+        )
+        await self.ch.execute("DROP TABLE IF EXISTS dt_micro")
+        await self.ch.execute("DROP TABLE IF EXISTS dt64_micro")
+
     async def test_named_tuples(self):
         """Named tuples are used for example in geohash functions
 
