@@ -57,7 +57,7 @@ setup_opts = dict(
     packages=find_packages(exclude=('test*',)),
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
-    install_requires=['sqlparse>=0.4.3'],
+    install_requires=['sqlparse>=0.4.4'],
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',
     zip_safe=False,
@@ -81,8 +81,8 @@ setup_opts = dict(
         'aiohttp': ['aiohttp>=3.8.4'],
         'aiohttp-speedups': ['aiodns', 'faust-cchardet', 'ciso8601>=2.3.0', 'aiohttp>=3.8.4'],
         # httpx client
-        'httpx': ['httpx'],
-        'httpx-speedups': ['ciso8601>=2.3.0', 'httpx'],
+        'httpx': ['httpx>=0.27'],
+        'httpx-speedups': ['ciso8601>=2.3.0', 'httpx>=0.27'],
     },
     cmdclass=dict(build_ext=ve_build_ext),
 )
