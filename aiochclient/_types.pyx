@@ -26,7 +26,17 @@ cdef datetime _datetime_parse(str string):
     return datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
 
 cdef datetime _datetime_parse_f(str string):
-    return datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
+    # ClickHouse DateTime64 may carry up to 9 fractional digits (nanoseconds),
+    # but Python datetime only supports microseconds and strptime's "%f"
+    # rejects more than 6 digits. Truncate the fractional part to microseconds
+    # so DateTime64(7..9) parses — matching ciso8601 when it is installed.
+    cdef:
+        Py_ssize_t dot = string.find('.')
+        datetime parsed
+    if dot < 0:
+        return datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
+    parsed = datetime.strptime(string[:dot], '%Y-%m-%d %H:%M:%S')
+    return parsed.replace(microsecond=int(string[dot + 1:dot + 7].ljust(6, '0')))
 
 cdef date _date_parse(str string):
     return datetime.strptime(string, '%Y-%m-%d')

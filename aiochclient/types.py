@@ -21,7 +21,16 @@ except ImportError:
         return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
 
     def datetime_parse_f(string):
-        return dt.datetime.strptime(string, '%Y-%m-%d %H:%M:%S.%f')
+        # ClickHouse DateTime64 may carry up to 9 fractional digits
+        # (nanoseconds), but Python datetime only supports microseconds and
+        # strptime's "%f" rejects more than 6 digits. Truncate the fractional
+        # part to microseconds so DateTime64(7..9) parses — matching the
+        # behaviour of ciso8601 when it is installed.
+        head, _, frac = string.partition('.')
+        parsed = dt.datetime.strptime(head, '%Y-%m-%d %H:%M:%S')
+        if frac:
+            parsed = parsed.replace(microsecond=int(frac[:6].ljust(6, '0')))
+        return parsed
 
 
 __all__ = ["what_py_converter", "rows2ch", "json2ch", "py2ch", "empty_convertor"]
