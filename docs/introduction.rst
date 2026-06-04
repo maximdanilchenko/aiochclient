@@ -53,11 +53,12 @@ and check ClickHouse is alive. Here's how you would do that:
 This automatically queries a instance of ClickHouse on `localhost:8123` with the
 default user. You may want to set up a different connection to test. To do that,
 change the following line::
+
     client = ChClient(s)
 
 To something like::
 
     client = ChClient(s, url='http://localhost:8123')
 
-You can find more options for connecting to ClickHouse in the :ref:`api`.
+You can find more options for connecting to ClickHouse in the :ref:`reference`.
 Continue reading to learn more about `aiochclient`.

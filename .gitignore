@@ -7,6 +7,7 @@
 .pypirc
 .pytest_cache
 /docs/build
+/docs/_build
 /build
 *.egg-info
 /dist
