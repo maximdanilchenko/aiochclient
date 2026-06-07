@@ -1430,3 +1430,125 @@ class TestErrorBody:
             await httpx_client._check_response(_FakeResp())
         assert str(exc.value).strip()
         assert "502" in str(exc.value)
+
+
+class TestExceptionTrailer:
+    # https://github.com/maximdanilchenko/aiochclient/issues/93
+    # ClickHouse commits a 200 status before streaming a large result, so a
+    # mid-stream error is reported via the X-ClickHouse-Exception-Code trailer
+    # and an __exception__ envelope appended to the body, not the status code.
+    OK_BODY = b"a\nString\nx\ny\n"
+    ERR_BODY = (
+        b"a\nString\nx\n"
+        b"__exception__\ntag\n"
+        b"Code: 159. DB::Exception: Timeout exceeded. (TIMEOUT_EXCEEDED)\n"
+        b"__exception__\n"
+    )
+    ERR_HEADERS = {"X-ClickHouse-Exception-Code": "159"}
+
+    async def test_raise_if_exception_code_helper(self):
+        from aiochclient.http_clients import abc
+
+        # no code -> no error
+        abc.raise_if_exception_code(None, [])
+        # code present -> ChClientError carrying the server message
+        with pytest.raises(ChClientError) as exc:
+            abc.raise_if_exception_code(
+                "159",
+                [
+                    b"__exception__",
+                    b"Code: 159. DB::Exception: Timeout. (TIMEOUT_EXCEEDED)",
+                ],
+            )
+        assert "TIMEOUT_EXCEEDED" in str(exc.value)
+        # code present but no envelope text -> falls back to the code
+        with pytest.raises(ChClientError) as exc:
+            abc.raise_if_exception_code("241", [])
+        assert "241" in str(exc.value)
+
+    async def _collect(self, client):
+        return [line async for line in client.post_return_lines("url", {}, {}, b"")]
+
+    async def test_aiohttp_trailer_stops_stream(self):
+        from aiochclient.http_clients.aiohttp import AiohttpHttpClient
+
+        # success: all data lines yielded, no error
+        client = AiohttpHttpClient(_FakeAioSession(200, {}, self.OK_BODY))
+        assert await self._collect(client) == [b"a\n", b"String\n", b"x\n", b"y\n"]
+
+        # mid-stream exception: data yielded, envelope skipped, error raised
+        client = AiohttpHttpClient(
+            _FakeAioSession(200, self.ERR_HEADERS, self.ERR_BODY)
+        )
+        with pytest.raises(ChClientError) as exc:
+            await self._collect(client)
+        assert "TIMEOUT_EXCEEDED" in str(exc.value)
+
+    async def test_httpx_trailer_stops_stream(self):
+        from aiochclient.http_clients.httpx import HttpxHttpClient
+
+        client = HttpxHttpClient(_FakeHttpxSession(200, {}, self.OK_BODY))
+        assert await self._collect(client) == [b"a\n", b"String\n", b"x\n", b"y\n"]
+
+        client = HttpxHttpClient(
+            _FakeHttpxSession(200, self.ERR_HEADERS, self.ERR_BODY)
+        )
+        with pytest.raises(ChClientError) as exc:
+            await self._collect(client)
+        assert "TIMEOUT_EXCEEDED" in str(exc.value)
+
+
+class _FakeAioResp:
+    def __init__(self, status, headers, body):
+        self.status = status
+        self.headers = headers
+        self._body = body
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    class _Content:
+        def __init__(self, body):
+            self._body = body
+
+        async def iter_any(self):
+            yield self._body
+
+    @property
+    def content(self):
+        return self._Content(self._body)
+
+    async def read(self):
+        return self._body
+
+
+class _FakeAioSession:
+    def __init__(self, status, headers, body):
+        self._resp = _FakeAioResp(status, headers, body)
+
+    def post(self, **kwargs):
+        return self._resp
+
+
+class _FakeHttpxResp:
+    def __init__(self, status, headers, body):
+        self.status_code = status
+        self.headers = headers
+        self._body = body
+
+    async def aiter_bytes(self):
+        yield self._body
+
+    async def aread(self):
+        return self._body
+
+
+class _FakeHttpxSession:
+    def __init__(self, status, headers, body):
+        self._resp = _FakeHttpxResp(status, headers, body)
+
+    async def post(self, **kwargs):
+        return self._resp

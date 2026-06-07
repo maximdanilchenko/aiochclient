@@ -3,7 +3,12 @@ from typing import Any, AsyncGenerator, List, Optional
 from aiohttp import ClientSession
 
 from aiochclient.exceptions import ChClientError
-from aiochclient.http_clients.abc import HttpClientABC
+from aiochclient.http_clients.abc import (
+    EXCEPTION_CODE_HEADER,
+    EXCEPTION_MARKER,
+    HttpClientABC,
+    raise_if_exception_code,
+)
 
 
 class AiohttpHttpClient(HttpClientABC):
@@ -28,13 +33,24 @@ class AiohttpHttpClient(HttpClientABC):
             await _check_response(resp)
 
             buffer: bytes = b''
+            exception_lines: List[bytes] = []
+            in_exception = False
             async for chunk in resp.content.iter_any():
                 lines: List[bytes] = chunk.split(self.line_separator)
                 if buffer:
                     lines[0] = buffer + lines[0]
                 for line in lines[:-1]:
-                    yield line + self.line_separator
+                    if line == EXCEPTION_MARKER:
+                        in_exception = True
+                    if in_exception:
+                        exception_lines.append(line)
+                    else:
+                        yield line + self.line_separator
                 buffer = lines[-1]
+            # Trailers are available now that the body is fully consumed.
+            raise_if_exception_code(
+                resp.headers.get(EXCEPTION_CODE_HEADER), exception_lines
+            )
             assert not buffer
 
     async def post_no_return(
@@ -44,6 +60,11 @@ class AiohttpHttpClient(HttpClientABC):
             url=url, params=params, headers=headers, data=data
         ) as resp:
             await _check_response(resp)
+            body = await resp.read()
+            raise_if_exception_code(
+                resp.headers.get(EXCEPTION_CODE_HEADER),
+                body.split(self.line_separator),
+            )
 
     async def close(self) -> None:
         await self._session.close()
