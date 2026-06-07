@@ -56,7 +56,7 @@ setup_opts = dict(
     packages=find_packages(exclude=('test*',)),
     package_dir={'aiochclient': 'aiochclient'},
     include_package_data=True,
-    install_requires=['sqlparse>=0.4.4'],
+    install_requires=['sqlparse>=0.4.4', 'tzdata'],
     python_requires='>=3.10',
     license='MIT',
     url='https://github.com/maximdanilchenko/aiochclient',

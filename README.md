@@ -159,9 +159,7 @@ rows = await client.fetch("SELECT * FROM t")
 ```
 
 `binary=True` currently affects the SELECT/decoding path only (INSERTs are
-unchanged). Decoding `DateTime`/`DateTime64` columns that carry a timezone
-requires OS timezone data or the [`tzdata`](https://pypi.org/project/tzdata/)
-package.
+unchanged).
 
 ## Documentation
 
