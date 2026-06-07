@@ -23,7 +23,11 @@ html_types:
 	cython -a aiochclient/_types.pyx
 
 docker-clickhouse:
-	docker pull clickhouse/clickhouse-server
+	@n=0; until docker pull clickhouse/clickhouse-server; do \
+		n=$$((n+1)); \
+		if [ $$n -ge 5 ]; then echo "docker pull failed after 5 attempts" && exit 1; fi; \
+		echo "docker pull failed, retrying ($$n)..." && sleep 5; \
+	done
 	docker start cs 2>/dev/null || docker run -p 8123:8123 -d --name cs -e CLICKHOUSE_SKIP_USER_SETUP=1 clickhouse/clickhouse-server
 	@echo "Waiting for ClickHouse to become ready..."
 	@for i in $$(seq 1 60); do \
