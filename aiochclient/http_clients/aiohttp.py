@@ -53,6 +53,17 @@ class AiohttpHttpClient(HttpClientABC):
             )
             assert not buffer
 
+    async def post_return_bytes(
+        self, url: str, params: dict, headers: dict, data: Any
+    ) -> AsyncGenerator[bytes, None]:
+        async with self._session.post(
+            url=url, params=params, headers=headers, data=data
+        ) as resp:
+            await _check_response(resp)
+            async for chunk in resp.content.iter_any():
+                yield chunk
+            raise_if_exception_code(resp.headers.get(EXCEPTION_CODE_HEADER), [])
+
     async def post_no_return(
         self, url: str, params: dict, headers: dict, data: Any
     ) -> None:

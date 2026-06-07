@@ -1,12 +1,49 @@
 import datetime as dt
 import re
+import struct
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from typing import Any, Callable, Generator, List, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from aiochclient.exceptions import ChClientError
+
+
+_TZ_UNSET = object()
+
+
+def _parse_tz(name: str) -> Optional[str]:
+    """Extract the timezone from a ``DateTime``/``DateTime64`` type name, if any.
+
+    e.g. ``DateTime64(3, 'Europe/Moscow')`` / ``DateTime('UTC')`` -> the tz name.
+    The TSV header escapes the quotes (``\\'Europe/Moscow\\'``), so backslashes
+    are stripped out.
+    """
+    if "'" in name:
+        return name[name.index("'") + 1 : name.rindex("'")].replace("\\", "")
+    return None
+
+# RowBinary integer specs: name -> (byte width, signed). All little-endian.
+RB_INT_SPECS = {
+    "UInt8": (1, False),
+    "UInt16": (2, False),
+    "UInt32": (4, False),
+    "UInt64": (8, False),
+    "UInt128": (16, False),
+    "UInt256": (32, False),
+    "Int8": (1, True),
+    "Int16": (2, True),
+    "Int32": (4, True),
+    "Int64": (8, True),
+    "Int128": (16, True),
+    "Int256": (32, True),
+}
+
+# Epoch used to turn day/second/tick offsets into python date/datetime objects.
+RB_EPOCH_DATE = dt.date(1970, 1, 1)
+RB_EPOCH_DATETIME = dt.datetime(1970, 1, 1)
 
 try:
     import ciso8601
@@ -149,6 +186,12 @@ class BaseType(ABC):
     def convert(self, value: bytes) -> Any:
         return self.p_type(self.decode(value))
 
+    def read(self, cursor) -> Any:
+        """Read a single value from a RowBinary cursor (binary engine)."""
+        raise ChClientError(
+            f"RowBinary decoding is not implemented for type '{self.name}'"
+        )
+
     @staticmethod
     def unconvert(value) -> bytes:
         return b"%a" % value
@@ -168,6 +211,13 @@ class StrType(BaseType):
         # example, turn a literal ``\t`` into a tab or drop a trailing backslash.
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> str:
+        if self.name.startswith("FixedString"):
+            length = int(self.name[12:-1])
+        else:
+            length = cursor.read_varint()
+        return cursor.read(length).decode()
+
     @staticmethod
     def unconvert(value: str) -> bytes:
         value = value.replace("\\", "\\\\").replace("'", "\\'")
@@ -186,6 +236,9 @@ class BoolType(BaseType):
     def convert(self, value: bytes) -> bool:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> bool:
+        return cursor.read(1) != b"\x00"
+
     @staticmethod
     def unconvert(value: bool) -> bytes:
         # We use an integer representation here to be compatible with older
@@ -199,6 +252,10 @@ class IntType(BaseType):
     def convert(self, value: bytes) -> Any:
         return self.p_type(value)
 
+    def read(self, cursor) -> int:
+        size, signed = RB_INT_SPECS[self.name]
+        return int.from_bytes(cursor.read(size), "little", signed=signed)
+
     @staticmethod
     def unconvert(value: int) -> bytes:
         return b"%d" % value
@@ -206,6 +263,11 @@ class IntType(BaseType):
 
 class FloatType(IntType):
     p_type = float
+
+    def read(self, cursor) -> float:
+        if self.name == "Float64":
+            return struct.unpack("<d", cursor.read(8))[0]
+        return struct.unpack("<f", cursor.read(4))[0]
 
     @staticmethod
     def unconvert(value: float) -> bytes:
@@ -226,12 +288,30 @@ class DateType(BaseType):
     def convert(self, value: bytes) -> Optional[dt.date]:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> dt.date:
+        return RB_EPOCH_DATE + dt.timedelta(
+            days=int.from_bytes(cursor.read(2), "little")
+        )
+
     @staticmethod
     def unconvert(value: dt.date) -> bytes:
         return b"%a" % str(value)
 
 
 class DateTimeType(BaseType):
+    def __init__(self, name: str, container: bool = False):
+        super().__init__(name, container)
+        # Resolve the (optional) timezone lazily on the first binary read so the
+        # TSV path — which never calls ``read`` and sees escaped type names — is
+        # untouched and ``tzdata`` is only required when actually decoding tz.
+        self._tz_name = _parse_tz(name)
+        self._tz = _TZ_UNSET
+
+    def _zone(self):
+        if self._tz is _TZ_UNSET:
+            self._tz = ZoneInfo(self._tz_name) if self._tz_name else None
+        return self._tz
+
     def p_type(self, string: str):
         string = string.strip("'")
         try:
@@ -245,6 +325,14 @@ class DateTimeType(BaseType):
     def convert(self, value: bytes) -> Optional[dt.datetime]:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> dt.datetime:
+        seconds = int.from_bytes(cursor.read(4), "little")
+        zone = self._zone()
+        if zone is None:
+            return RB_EPOCH_DATETIME + dt.timedelta(seconds=seconds)
+        # Match the server's TSV output: wall-clock in the column timezone.
+        return dt.datetime.fromtimestamp(seconds, zone).replace(tzinfo=None)
+
     @staticmethod
     def unconvert(value: dt.datetime) -> bytes:
         if value.microsecond != 0:
@@ -254,6 +342,18 @@ class DateTimeType(BaseType):
 
 
 class DateTime64Type(BaseType):
+    def __init__(self, name: str, container: bool = False):
+        super().__init__(name, container)
+        # DateTime64(P) or DateTime64(P, 'TZ') -> precision P (+ optional tz)
+        self._precision = int(name[name.index("(") + 1 :].split(",")[0].split(")")[0])
+        self._tz_name = _parse_tz(name)
+        self._tz = _TZ_UNSET
+
+    def _zone(self):
+        if self._tz is _TZ_UNSET:
+            self._tz = ZoneInfo(self._tz_name) if self._tz_name else None
+        return self._tz
+
     def p_type(self, string: str):
         string = string.strip("'")
         try:
@@ -267,6 +367,26 @@ class DateTime64Type(BaseType):
     def convert(self, value: bytes) -> Optional[dt.datetime]:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> dt.datetime:
+        ticks = int.from_bytes(cursor.read(8), "little", signed=True)
+        # Python datetime only supports microseconds; truncate finer precision.
+        if self._precision <= 6:
+            micros = ticks * 10 ** (6 - self._precision)
+        else:
+            micros = ticks // 10 ** (self._precision - 6)
+        zone = self._zone()
+        if zone is None:
+            return RB_EPOCH_DATETIME + dt.timedelta(microseconds=micros)
+        # Match the server's TSV output: wall-clock in the column timezone.
+        return (
+            (
+                dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+                + dt.timedelta(microseconds=micros)
+            )
+            .astimezone(zone)
+            .replace(tzinfo=None)
+        )
+
 
 class UUIDType(BaseType):
     def p_type(self, string):
@@ -274,6 +394,14 @@ class UUIDType(BaseType):
 
     def convert(self, value: bytes) -> UUID:
         return self.p_type(value.decode())
+
+    def read(self, cursor) -> UUID:
+        data = cursor.read(16)
+        # Stored as two little-endian UInt64 halves (high, then low).
+        return UUID(
+            int=(int.from_bytes(data[:8], "little") << 64)
+            | int.from_bytes(data[8:], "little")
+        )
 
     @staticmethod
     def unconvert(value: UUID) -> bytes:
@@ -287,6 +415,9 @@ class IPv4Type(BaseType):
     def convert(self, value: bytes) -> IPv4Address:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> IPv4Address:
+        return IPv4Address(int.from_bytes(cursor.read(4), "little"))
+
     @staticmethod
     def unconvert(value: UUID) -> bytes:
         return b"%a" % str(value)
@@ -298,6 +429,9 @@ class IPv6Type(BaseType):
 
     def convert(self, value: bytes) -> IPv6Address:
         return self.p_type(value.decode())
+
+    def read(self, cursor) -> IPv6Address:
+        return IPv6Address(cursor.read(16))
 
     @staticmethod
     def unconvert(value: UUID) -> bytes:
@@ -322,6 +456,9 @@ class TupleType(BaseType):
 
     def convert(self, value: bytes) -> list:
         return self.p_type(value.decode())
+
+    def read(self, cursor) -> tuple:
+        return tuple(tp.read(cursor) for tp in self.types)
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -367,6 +504,12 @@ class MapType(BaseType):
     def convert(self, value: bytes) -> dict:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> dict:
+        return {
+            self.key_type.read(cursor): self.value_type.read(cursor)
+            for _ in range(cursor.read_varint())
+        }
+
     @staticmethod
     def unconvert(value) -> bytes:
         return (
@@ -391,6 +534,9 @@ class ArrayType(BaseType):
 
     def convert(self, value: bytes) -> list:
         return self.p_type(value.decode())
+
+    def read(self, cursor) -> list:
+        return [self.type.read(cursor) for _ in range(cursor.read_varint())]
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -419,6 +565,13 @@ class NestedType(BaseType):
     def convert(self, value: bytes) -> List[tuple]:
         return self.p_type(value.decode())
 
+    def read(self, cursor) -> List[tuple]:
+        # With flatten_nested=0 a Nested column is encoded as Array(Tuple(...)).
+        return [
+            tuple(tp.read(cursor) for tp in self.types)
+            for _ in range(cursor.read_varint())
+        ]
+
     @staticmethod
     def unconvert(value) -> bytes:
         return (
@@ -442,6 +595,11 @@ class NullableType(BaseType):
         if string in self.NULLABLE:
             return None
         return self.type.p_type(string)
+
+    def read(self, cursor) -> Any:
+        if cursor.read(1) != b"\x00":
+            return None
+        return self.type.read(cursor)
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -468,12 +626,58 @@ class LowCardinalityType(BaseType):
     def p_type(self, string: str) -> Any:
         return self.type.p_type(string)
 
+    def read(self, cursor) -> Any:
+        # In RowBinary a LowCardinality(T) is encoded exactly as T.
+        return self.type.read(cursor)
+
+
+class EnumType(StrType):
+    """Enum8/Enum16. TSV gives the label string (handled by StrType); RowBinary
+    gives the signed integer index, mapped back to its label here."""
+
+    def __init__(self, name: str, container: bool = False):
+        super().__init__(name, container)
+        self._size = 1 if name.startswith("Enum8") else 2
+        self._mapping = {
+            int(num): label
+            for label, num in re.findall(
+                r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name
+            )
+        }
+
+    def read(self, cursor) -> str:
+        index = int.from_bytes(cursor.read(self._size), "little", signed=True)
+        return self._mapping[index]
+
 
 class DecimalType(BaseType):
     p_type = Decimal
 
+    def __init__(self, name: str, container: bool = False):
+        super().__init__(name, container)
+        nums = [int(n) for n in re.findall(r"\d+", name)]
+        if name.startswith("Decimal("):
+            precision, self._scale = nums[0], nums[1]
+        else:
+            precision = {
+                "Decimal32": 9,
+                "Decimal64": 18,
+                "Decimal128": 38,
+                "Decimal256": 76,
+            }[name.split("(")[0]]
+            self._scale = nums[-1]
+        self._size = (
+            4
+            if precision <= 9
+            else 8 if precision <= 18 else 16 if precision <= 38 else 32
+        )
+
     def convert(self, value: bytes) -> Decimal:
         return self.p_type(value.decode())
+
+    def read(self, cursor) -> Decimal:
+        raw = int.from_bytes(cursor.read(self._size), "little", signed=True)
+        return Decimal(raw).scaleb(-self._scale)
 
     @staticmethod
     def unconvert(value: Decimal) -> bytes:
@@ -498,8 +702,8 @@ CH_TYPES_MAPPING = {
     "Float64": FloatType,
     "String": StrType,
     "FixedString": StrType,
-    "Enum8": StrType,
-    "Enum16": StrType,
+    "Enum8": EnumType,
+    "Enum16": EnumType,
     "Date": DateType,
     "DateTime": DateTimeType,
     "DateTime64": DateTime64Type,

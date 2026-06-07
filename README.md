@@ -147,6 +147,22 @@ assert list(row.keys()) == ["a", "b"]
 assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 ```
 
+### RowBinary engine (experimental)
+
+By default SELECT results are decoded from ClickHouse's text (TSV) format. You
+can instead decode them with the binary `RowBinary` engine, which avoids text
+escaping entirely and is typically faster:
+
+```python
+client = ChClient(session, binary=True)
+rows = await client.fetch("SELECT * FROM t")
+```
+
+`binary=True` currently affects the SELECT/decoding path only (INSERTs are
+unchanged). Decoding `DateTime`/`DateTime64` columns that carry a timezone
+requires OS timezone data or the [`tzdata`](https://pypi.org/project/tzdata/)
+package.
+
 ## Documentation
 
 To check out the [api docs](https://aiochclient.readthedocs.io/en/latest/api.html),
