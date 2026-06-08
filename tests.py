@@ -1452,6 +1452,16 @@ class TestRowBinaryDecode:
             assert value == expected, type_name
             assert type(value) is type(expected), type_name
 
+    async def test_golden_encode(self):
+        from aiochclient.types import what_py_type
+
+        for type_name, hex_bytes, value in self.GOLDEN:
+            # DateTime64(9) nanoseconds are truncated to microseconds on read,
+            # so that one value is not byte-for-byte round-trippable.
+            if "DateTime64(9)" in type_name:
+                continue
+            assert what_py_type(type_name).write(value).hex() == hex_bytes, type_name
+
     async def test_varint_boundaries(self):
         from aiochclient.binary import Cursor
 
@@ -1522,6 +1532,61 @@ class TestRowBinary:
         # unambiguous (unlike the TSV path, issue #14).
         binary = self._binary_client()
         assert (await binary.fetchrow("SELECT '' AS s"))["s"] == ""
+
+    async def test_insert_round_trip(self):
+        binary = self._binary_client()
+        await binary.execute("DROP TABLE IF EXISTS rb_insert")
+        await binary.execute(
+            """
+            CREATE TABLE rb_insert (
+                u8 UInt8, i64 Int64, f Float64, s String, fs FixedString(4),
+                d Date, dttm DateTime('UTC'),
+                dt64 DateTime64(3, 'Europe/Moscow'),
+                dec Decimal(18, 4), uu UUID, ip4 IPv4, ip6 IPv6,
+                e Enum8('a' = 1, 'b' = 2), arr Array(UInt8),
+                m Map(String, UInt8), nn Nullable(UInt8), tup Tuple(UInt8, String)
+            ) ENGINE = Memory
+            """
+        )
+        row = (
+            7,
+            -5,
+            3.5,
+            "hi",
+            "abcd",
+            dt.date(2021, 5, 6),
+            dt.datetime(2021, 5, 6, 7, 8, 9),
+            dt.datetime(2021, 5, 6, 10, 8, 9, 123000),
+            Decimal("12.3456"),
+            UUID("1ea47c97-16a8-4338-877e-66f464374944"),
+            IPv4Address("1.2.3.4"),
+            IPv6Address("::1"),
+            "b",
+            [1, 2, 3],
+            {"k": 9},
+            None,
+            (4, "z"),
+        )
+        await binary.execute("INSERT INTO rb_insert VALUES", row)
+        # Read back with both engines: the binary insert must match exactly.
+        assert (await binary.fetchrow("SELECT * FROM rb_insert"))[:] == row
+        assert (await self.ch.fetchrow("SELECT * FROM rb_insert"))[:] == row
+        await binary.execute("DROP TABLE IF EXISTS rb_insert")
+
+    async def test_insert_with_column_list(self):
+        binary = self._binary_client()
+        await binary.execute("DROP TABLE IF EXISTS rb_insert_cols")
+        await binary.execute(
+            "CREATE TABLE rb_insert_cols (a UInt8, b String, c UInt8) ENGINE = Memory"
+        )
+        # Columns out of table order — types must be looked up in INSERT order.
+        await binary.execute("INSERT INTO rb_insert_cols (c, a) VALUES", (3, 1))
+        assert (await binary.fetchrow("SELECT a, b, c FROM rb_insert_cols"))[:] == (
+            1,
+            "",
+            3,
+        )
+        await binary.execute("DROP TABLE IF EXISTS rb_insert_cols")
 
 
 class TestErrorBody:

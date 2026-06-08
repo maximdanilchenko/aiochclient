@@ -149,17 +149,18 @@ assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 
 ### RowBinary engine (experimental)
 
-By default SELECT results are decoded from ClickHouse's text (TSV) format. You
-can instead decode them with the binary `RowBinary` engine, which avoids text
-escaping entirely and is typically faster:
+By default results are encoded/decoded through ClickHouse's text (TSV) format.
+You can instead use the binary `RowBinary` engine, which avoids text escaping
+entirely and is typically faster, for both SELECT and INSERT:
 
 ```python
 client = ChClient(session, binary=True)
+await client.execute("INSERT INTO t VALUES", (1, "a"), (2, "b"))
 rows = await client.fetch("SELECT * FROM t")
 ```
 
-`binary=True` currently affects the SELECT/decoding path only (INSERTs are
-unchanged).
+Because RowBinary encoding is type-specific, a binary INSERT first looks up the
+target column types (one lightweight query) and encodes the rows to match them.
 
 ## Documentation
 

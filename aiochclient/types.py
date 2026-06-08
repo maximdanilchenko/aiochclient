@@ -45,6 +45,19 @@ RB_INT_SPECS = {
 RB_EPOCH_DATE = dt.date(1970, 1, 1)
 RB_EPOCH_DATETIME = dt.datetime(1970, 1, 1)
 
+
+def write_varint(value: int) -> bytes:
+    """Encode an unsigned integer as LEB128 (RowBinary length prefix)."""
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
 try:
     import ciso8601
 
@@ -192,6 +205,12 @@ class BaseType(ABC):
             f"RowBinary decoding is not implemented for type '{self.name}'"
         )
 
+    def write(self, value) -> bytes:
+        """Encode a single value to RowBinary bytes (binary engine)."""
+        raise ChClientError(
+            f"RowBinary encoding is not implemented for type '{self.name}'"
+        )
+
     @staticmethod
     def unconvert(value) -> bytes:
         return b"%a" % value
@@ -218,6 +237,13 @@ class StrType(BaseType):
             length = cursor.read_varint()
         return cursor.read(length).decode()
 
+    def write(self, value: str) -> bytes:
+        data = value.encode()
+        if self.name.startswith("FixedString"):
+            length = int(self.name[12:-1])
+            return data[:length].ljust(length, b"\x00")
+        return write_varint(len(data)) + data
+
     @staticmethod
     def unconvert(value: str) -> bytes:
         value = value.replace("\\", "\\\\").replace("'", "\\'")
@@ -239,6 +265,9 @@ class BoolType(BaseType):
     def read(self, cursor) -> bool:
         return cursor.read(1) != b"\x00"
 
+    def write(self, value: bool) -> bytes:
+        return b"\x01" if value else b"\x00"
+
     @staticmethod
     def unconvert(value: bool) -> bytes:
         # We use an integer representation here to be compatible with older
@@ -256,6 +285,10 @@ class IntType(BaseType):
         size, signed = RB_INT_SPECS[self.name]
         return int.from_bytes(cursor.read(size), "little", signed=signed)
 
+    def write(self, value: int) -> bytes:
+        size, signed = RB_INT_SPECS[self.name]
+        return int(value).to_bytes(size, "little", signed=signed)
+
     @staticmethod
     def unconvert(value: int) -> bytes:
         return b"%d" % value
@@ -268,6 +301,11 @@ class FloatType(IntType):
         if self.name == "Float64":
             return struct.unpack("<d", cursor.read(8))[0]
         return struct.unpack("<f", cursor.read(4))[0]
+
+    def write(self, value: float) -> bytes:
+        if self.name == "Float64":
+            return struct.pack("<d", value)
+        return struct.pack("<f", value)
 
     @staticmethod
     def unconvert(value: float) -> bytes:
@@ -292,6 +330,9 @@ class DateType(BaseType):
         return RB_EPOCH_DATE + dt.timedelta(
             days=int.from_bytes(cursor.read(2), "little")
         )
+
+    def write(self, value: dt.date) -> bytes:
+        return (value - RB_EPOCH_DATE).days.to_bytes(2, "little")
 
     @staticmethod
     def unconvert(value: dt.date) -> bytes:
@@ -332,6 +373,15 @@ class DateTimeType(BaseType):
             return RB_EPOCH_DATETIME + dt.timedelta(seconds=seconds)
         # Match the server's TSV output: wall-clock in the column timezone.
         return dt.datetime.fromtimestamp(seconds, zone).replace(tzinfo=None)
+
+    def write(self, value: dt.datetime) -> bytes:
+        zone = self._zone()
+        if zone is None:
+            seconds = (value - RB_EPOCH_DATETIME) // dt.timedelta(seconds=1)
+        else:
+            # ``value`` is naive wall-clock in the column timezone.
+            seconds = int(value.replace(tzinfo=zone).timestamp())
+        return seconds.to_bytes(4, "little")
 
     @staticmethod
     def unconvert(value: dt.datetime) -> bytes:
@@ -387,6 +437,21 @@ class DateTime64Type(BaseType):
             .replace(tzinfo=None)
         )
 
+    def write(self, value: dt.datetime) -> bytes:
+        zone = self._zone()
+        if zone is None:
+            micros = (value - RB_EPOCH_DATETIME) // dt.timedelta(microseconds=1)
+        else:
+            aware = value.replace(tzinfo=zone)
+            micros = (
+                aware - dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+            ) // dt.timedelta(microseconds=1)
+        if self._precision <= 6:
+            ticks = micros // 10 ** (6 - self._precision)
+        else:
+            ticks = micros * 10 ** (self._precision - 6)
+        return ticks.to_bytes(8, "little", signed=True)
+
 
 class UUIDType(BaseType):
     def p_type(self, string):
@@ -403,6 +468,14 @@ class UUIDType(BaseType):
             | int.from_bytes(data[8:], "little")
         )
 
+    def write(self, value: UUID) -> bytes:
+        if not isinstance(value, UUID):
+            value = UUID(str(value))
+        number = value.int
+        return (number >> 64).to_bytes(8, "little") + (
+            number & 0xFFFFFFFFFFFFFFFF
+        ).to_bytes(8, "little")
+
     @staticmethod
     def unconvert(value: UUID) -> bytes:
         return b"%a" % str(value)
@@ -418,6 +491,9 @@ class IPv4Type(BaseType):
     def read(self, cursor) -> IPv4Address:
         return IPv4Address(int.from_bytes(cursor.read(4), "little"))
 
+    def write(self, value) -> bytes:
+        return int(IPv4Address(value)).to_bytes(4, "little")
+
     @staticmethod
     def unconvert(value: UUID) -> bytes:
         return b"%a" % str(value)
@@ -432,6 +508,9 @@ class IPv6Type(BaseType):
 
     def read(self, cursor) -> IPv6Address:
         return IPv6Address(cursor.read(16))
+
+    def write(self, value) -> bytes:
+        return IPv6Address(value).packed
 
     @staticmethod
     def unconvert(value: UUID) -> bytes:
@@ -459,6 +538,9 @@ class TupleType(BaseType):
 
     def read(self, cursor) -> tuple:
         return tuple(tp.read(cursor) for tp in self.types)
+
+    def write(self, value) -> bytes:
+        return b"".join(tp.write(elem) for tp, elem in zip(self.types, value))
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -510,6 +592,13 @@ class MapType(BaseType):
             for _ in range(cursor.read_varint())
         }
 
+    def write(self, value) -> bytes:
+        parts = [write_varint(len(value))]
+        for key, val in value.items():
+            parts.append(self.key_type.write(key))
+            parts.append(self.value_type.write(val))
+        return b"".join(parts)
+
     @staticmethod
     def unconvert(value) -> bytes:
         return (
@@ -537,6 +626,11 @@ class ArrayType(BaseType):
 
     def read(self, cursor) -> list:
         return [self.type.read(cursor) for _ in range(cursor.read_varint())]
+
+    def write(self, value) -> bytes:
+        return write_varint(len(value)) + b"".join(
+            self.type.write(elem) for elem in value
+        )
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -572,6 +666,13 @@ class NestedType(BaseType):
             for _ in range(cursor.read_varint())
         ]
 
+    def write(self, value) -> bytes:
+        parts = [write_varint(len(value))]
+        for row in value:
+            for tp, elem in zip(self.types, row):
+                parts.append(tp.write(elem))
+        return b"".join(parts)
+
     @staticmethod
     def unconvert(value) -> bytes:
         return (
@@ -600,6 +701,11 @@ class NullableType(BaseType):
         if cursor.read(1) != b"\x00":
             return None
         return self.type.read(cursor)
+
+    def write(self, value) -> bytes:
+        if value is None:
+            return b"\x01"
+        return b"\x00" + self.type.write(value)
 
     @staticmethod
     def unconvert(value) -> bytes:
@@ -630,6 +736,9 @@ class LowCardinalityType(BaseType):
         # In RowBinary a LowCardinality(T) is encoded exactly as T.
         return self.type.read(cursor)
 
+    def write(self, value) -> bytes:
+        return self.type.write(value)
+
 
 class EnumType(StrType):
     """Enum8/Enum16. TSV gives the label string (handled by StrType); RowBinary
@@ -644,10 +753,14 @@ class EnumType(StrType):
                 r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name
             )
         }
+        self._reverse = {label: index for index, label in self._mapping.items()}
 
     def read(self, cursor) -> str:
         index = int.from_bytes(cursor.read(self._size), "little", signed=True)
         return self._mapping[index]
+
+    def write(self, value: str) -> bytes:
+        return self._reverse[value].to_bytes(self._size, "little", signed=True)
 
 
 class DecimalType(BaseType):
@@ -678,6 +791,10 @@ class DecimalType(BaseType):
     def read(self, cursor) -> Decimal:
         raw = int.from_bytes(cursor.read(self._size), "little", signed=True)
         return Decimal(raw).scaleb(-self._scale)
+
+    def write(self, value: Decimal) -> bytes:
+        raw = int(Decimal(value).scaleb(self._scale))
+        return raw.to_bytes(self._size, "little", signed=True)
 
     @staticmethod
     def unconvert(value: Decimal) -> bytes:
