@@ -3,6 +3,7 @@ import datetime as _dt
 import json
 import re
 import struct
+from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
@@ -1565,3 +1566,117 @@ def json2ch(*records, dumps):
 
 def empty_convertor(bytes value):
     return value
+
+
+cdef class Record:
+    """Compiled mirror of :class:`aiochclient.records.Record`.
+
+    A ``cdef class`` instantiates far more cheaply than a pure-Python
+    ``Mapping`` subclass, which matters when a single ``fetch`` wraps tens of
+    thousands of rows. It cannot inherit from ``Mapping`` (cython forbids the
+    ABCMeta metaclass), so the mapping interface is implemented explicitly and
+    the class is registered as a virtual ``Mapping`` for ``isinstance`` checks.
+    """
+
+    cdef public object _row
+    cdef public dict _names
+    cdef public list _converters
+    cdef bint _decoded
+
+    def __init__(self, row, dict names, list converters):
+        self._row = row
+        if not row:
+            # in case of empty row (e.g. a WITH TOTALS placeholder)
+            self._decoded = True
+            self._converters = []
+            self._names = {}
+        else:
+            self._decoded = False
+            self._converters = converters
+            self._names = names
+
+    @classmethod
+    def from_decoded(cls, tuple values, dict names):
+        """Build a record from already-decoded values (binary/native path)."""
+        return record_new(values, names)
+
+    cdef _decode(self):
+        if self._decoded:
+            return
+        self._row = tuple(
+            converter(val)
+            for converter, val in zip(self._converters, self._row.split(b"\t"))
+        )
+        self._decoded = True
+
+    cdef _getitem(self, key):
+        if type(key) is str:
+            try:
+                return self._row[self._names[key]]
+            except KeyError:
+                if not self._row:
+                    raise KeyError(
+                        "Empty row. May be it is result of 'WITH TOTALS' query."
+                    )
+                raise KeyError(f"No fields with name '{key}'")
+        try:
+            return self._row[key]
+        except IndexError:
+            if not self._row:
+                raise IndexError(
+                    "Empty row. May be it is result of 'WITH TOTALS' query."
+                )
+            raise IndexError(f"No fields with index '{key}'")
+
+    def __getitem__(self, key):
+        if not self._decoded:
+            self._decode()
+        return self._getitem(key)
+
+    def __iter__(self):
+        return iter(self._names)
+
+    def __len__(self):
+        return len(self._names)
+
+    # -- collections.abc.Mapping mixin interface (matched semantics) --
+    def __contains__(self, key):
+        try:
+            self[key]
+        except KeyError:
+            return False
+        return True
+
+    def keys(self):
+        return KeysView(self)
+
+    def items(self):
+        return ItemsView(self)
+
+    def values(self):
+        return ValuesView(self)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __eq__(self, other):
+        return isinstance(other, Mapping) and dict(self) == dict(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+Mapping.register(Record)
+
+
+cpdef Record record_new(tuple values, dict names):
+    """Fast path: wrap already-decoded ``values`` without going through __init__."""
+    cdef Record record = Record.__new__(Record)
+    record._row = values
+    record._names = names
+    record._converters = None
+    record._decoded = True
+    return record

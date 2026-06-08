@@ -12,7 +12,7 @@ methods synchronous and fast).
 from typing import Any, AsyncGenerator, Callable, List
 
 from aiochclient.exceptions import NeedMoreData
-from aiochclient.records import Record
+from aiochclient.records import Record, record_from_decoded
 
 # Use the compiled engine (Cursor, type objects with C-level read/write, and a
 # whole-row reader that avoids per-value Python dispatch) when the Cython
@@ -122,7 +122,7 @@ class RowBinaryFabric:
         return tuple(tp.read(cursor) for tp in self.types)
 
     def new(self, values: tuple) -> Record:
-        return Record.from_decoded(values, self.names)
+        return record_from_decoded(values, self.names)
 
 
 async def rows_from_binary(

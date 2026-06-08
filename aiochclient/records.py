@@ -1,94 +1,105 @@
 from collections.abc import Mapping
 from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
-# Optional cython extension:
+# Optional cython extension. When available it also provides a compiled Record
+# (much cheaper to instantiate) and the matching ``record_from_decoded`` factory.
 try:
-    from aiochclient._types import empty_convertor, what_py_converter
+    from aiochclient._types import (
+        Record,
+        empty_convertor,
+        record_new as record_from_decoded,
+        what_py_converter,
+    )
 except ImportError:
     from aiochclient.types import empty_convertor, what_py_converter
 
-__all__ = ["RecordsFabric", "Record", "FromJsonFabric"]
+    class Record(Mapping):
+        """Lightweight, memory efficient objects with full mapping interface,
+        where you can get fields by names or by indexes.
 
+        Usage:
 
-class Record(Mapping):
-    """Lightweight, memory efficient objects with full mapping interface, where
-    you can get fields by names or by indexes.
+        .. code-block:: python
 
-    Usage:
+            row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
 
-    .. code-block:: python
+            assert row["a"] == 1
+            assert row[0] == 1
+            assert row[:] == (1, (dt.date(2018, 9, 8), 3.14))
+            assert list(row.keys()) == ["a", "b"]
+            assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 
-        row = await client.fetchrow("SELECT a, b FROM t WHERE a=1")
+        """
 
-        assert row["a"] == 1
-        assert row[0] == 1
-        assert row[:] == (1, (dt.date(2018, 9, 8), 3.14))
-        assert list(row.keys()) == ["a", "b"]
-        assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
+        __slots__ = ("_converters", "_decoded", "_names", "_row")
 
-    """
+        def __init__(
+            self, row: bytes, names: Dict[str, Any], converters: List[Callable]
+        ):
+            self._row: Union[bytes, Tuple[Any]] = row
+            if not self._row:
+                # in case of empty row
+                self._decoded = True
+                self._converters = []
+                self._names = {}
+            else:
+                self._decoded = False
+                self._converters = converters
+                self._names = names
 
-    __slots__ = ("_converters", "_decoded", "_names", "_row")
+        @classmethod
+        def from_decoded(cls, values: Tuple[Any], names: Dict[str, Any]) -> "Record":
+            """Build a record from already-decoded values (binary/native path)."""
+            record = cls.__new__(cls)
+            record._row = values
+            record._decoded = True
+            record._converters = None
+            record._names = names
+            return record
 
-    def __init__(self, row: bytes, names: Dict[str, Any], converters: List[Callable]):
-        self._row: Union[bytes, Tuple[Any]] = row
-        if not self._row:
-            # in case of empty row
-            self._decoded = True
-            self._converters = []
-            self._names = {}
-        else:
-            self._decoded = False
-            self._converters = converters
-            self._names = names
+        def __getitem__(self, key: Union[str, int, slice]) -> Any:
+            self._decode()
+            return self._getitem(key)
 
-    @classmethod
-    def from_decoded(cls, values: Tuple[Any], names: Dict[str, Any]) -> "Record":
-        """Build a record from already-decoded values (RowBinary path)."""
-        record = cls.__new__(cls)
-        record._row = values
-        record._decoded = True
-        record._converters = []
-        record._names = names
-        return record
-
-    def __getitem__(self, key: Union[str, int, slice]) -> Any:
-        self._decode()
-        return self._getitem(key)
-
-    def _getitem(self, key: Union[str, int, slice]) -> Any:
-        if type(key) == str:
+        def _getitem(self, key: Union[str, int, slice]) -> Any:
+            if type(key) == str:
+                try:
+                    return self._row[self._names[key]]
+                except KeyError:
+                    if not self._row:
+                        raise KeyError(
+                            "Empty row. May be it is result of 'WITH TOTALS' query."
+                        )
+                    raise KeyError(f"No fields with name '{key}'")
             try:
-                return self._row[self._names[key]]
-            except KeyError:
+                return self._row[key]
+            except IndexError:
                 if not self._row:
-                    raise KeyError(
+                    raise IndexError(
                         "Empty row. May be it is result of 'WITH TOTALS' query."
                     )
-                raise KeyError(f"No fields with name '{key}'")
-        try:
-            return self._row[key]
-        except IndexError:
-            if not self._row:
-                raise IndexError(
-                    "Empty row. May be it is result of 'WITH TOTALS' query."
-                )
-            raise IndexError(f"No fields with index '{key}'")
+                raise IndexError(f"No fields with index '{key}'")
 
-    def __iter__(self) -> Iterator:
-        return iter(self._names)
+        def __iter__(self) -> Iterator:
+            return iter(self._names)
 
-    def __len__(self) -> int:
-        return len(self._names)
+        def __len__(self) -> int:
+            return len(self._names)
 
-    def _decode(self):
-        if self._decoded:
-            return None
-        self._row = tuple(
-            converter(val)
-            for converter, val in zip(self._converters, self._row.split(b"\t"))
-        )
-        self._decoded = True
+        def _decode(self):
+            if self._decoded:
+                return None
+            self._row = tuple(
+                converter(val)
+                for converter, val in zip(self._converters, self._row.split(b"\t"))
+            )
+            self._decoded = True
+
+    def record_from_decoded(values: Tuple[Any], names: Dict[str, Any]) -> Record:
+        return Record.from_decoded(values, names)
+
+
+__all__ = ["RecordsFabric", "Record", "FromJsonFabric", "record_from_decoded"]
 
 
 class RecordsFabric:

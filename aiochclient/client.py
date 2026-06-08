@@ -6,7 +6,7 @@ from types import TracebackType
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Optional, Type
 
 from aiochclient.binary import fetch_column_types, rows_from_binary, rows_to_binary
-from aiochclient.native import rows_from_native
+from aiochclient.native import blocks_from_native, rows_from_native
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -229,6 +229,38 @@ class ChClient:
                 url=self.url, params=params, headers=self.headers, data=data
             )
 
+    def _native_block_stream(
+        self,
+        query: str,
+        params: Optional[Dict[str, Any]],
+        query_id: str,
+    ):
+        """Native-block source for a fetch-style query, or ``None`` if N/A.
+
+        ``fetch`` collects a whole result into a list, so it can consume the
+        Native stream a block at a time and ``list.extend`` each block — keeping
+        the per-row work out of the (much costlier) async-generator protocol.
+        Returns ``None`` for queries that don't fetch in Native (so the caller
+        falls back to the generic row path).
+        """
+        query_params = self._prepare_query_params(params)
+        if query_params:
+            query = query.format(**query_params)
+        need_fetch, is_json, _ = self._parse_squery(query)
+        if not need_fetch or is_json:
+            return None
+        query += " FORMAT Native"
+        request_params = {**self.params}
+        if query_id is not None:
+            request_params["query_id"] = query_id
+        source = self._http_client.post_return_bytes(
+            url=self.url,
+            params=request_params,
+            headers=self.headers,
+            data=query.encode(),
+        )
+        return blocks_from_native(source)
+
     @staticmethod
     def _rowbinary_insert_query(query: str) -> str:
         # Swap the trailing ``VALUES`` for ``FORMAT RowBinary`` so the binary
@@ -328,6 +360,13 @@ class ChClient:
 
         :return: All rows from query.
         """
+        if self._native and not json and not args:
+            blocks = self._native_block_stream(query, params, query_id)
+            if blocks is not None:
+                result: List[Record] = []
+                async for block in blocks:
+                    result.extend(block)
+                return result
         return [
             row
             async for row in self._execute(

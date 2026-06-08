@@ -14,7 +14,7 @@ from typing import AsyncGenerator
 
 from aiochclient.binary import BinaryReader, read_binary_str
 from aiochclient.exceptions import ChClientError, NeedMoreData
-from aiochclient.records import Record
+from aiochclient.records import Record, record_from_decoded
 
 # Use the compiled Cursor (with bulk column reads) when available.
 try:
@@ -89,10 +89,16 @@ def _read_varint(cursor):
     return cursor.read_varint()
 
 
-async def rows_from_native(
+async def blocks_from_native(
     source: AsyncGenerator[bytes, None],
-) -> AsyncGenerator[Record, None]:
-    """Yield :class:`Record` per row of a ``Native`` stream (block by block)."""
+) -> AsyncGenerator[list, None]:
+    """Yield one list of :class:`Record` per ``Native`` block.
+
+    Decoding (and building the rows for) a whole block at once, then handing the
+    list back in a single ``async`` step, avoids pulling 10000s of rows one by
+    one through the async-generator protocol — that per-item cost otherwise
+    roughly halves throughput versus the raw columnar decode.
+    """
     reader = BinaryReader(source)
     while True:
         try:
@@ -114,5 +120,13 @@ async def rows_from_native(
         if not num_rows:
             continue
         name_map = {name: index for index, name in enumerate(names)}
-        for values in zip(*columns):
-            yield Record.from_decoded(values, name_map)
+        yield [record_from_decoded(values, name_map) for values in zip(*columns)]
+
+
+async def rows_from_native(
+    source: AsyncGenerator[bytes, None],
+) -> AsyncGenerator[Record, None]:
+    """Yield :class:`Record` per row of a ``Native`` stream."""
+    async for block in blocks_from_native(source):
+        for record in block:
+            yield record
