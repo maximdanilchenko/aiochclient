@@ -1770,6 +1770,40 @@ class TestNative:
         await native.execute("DROP TABLE IF EXISTS native_w")
         await native.execute("DROP TABLE IF EXISTS native_w_ref")
 
+    async def test_insert_streams_multiple_blocks(self):
+        # More rows than the block size exercises the multi-block streaming path.
+        client = ChClient(
+            self.ch._http_client._session, native=True, insert_block_size=64
+        )
+        await client.execute("DROP TABLE IF EXISTS native_multi")
+        await client.execute(
+            "CREATE TABLE native_multi (id UInt32, name String) ENGINE = Memory"
+        )
+        rows = [(i, f"n{i}") for i in range(500)]  # ~8 blocks at size 64
+        await client.execute("INSERT INTO native_multi VALUES", *rows)
+        got = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_multi ORDER BY id")
+        ]
+        assert got == rows
+        await client.execute("DROP TABLE IF EXISTS native_multi")
+
+    async def test_insert_atomic_single_block(self):
+        # insert_block_size=0 sends one atomic block instead of streaming.
+        client = ChClient(
+            self.ch._http_client._session, native=True, insert_block_size=0
+        )
+        await client.execute("DROP TABLE IF EXISTS native_atomic")
+        await client.execute(
+            "CREATE TABLE native_atomic (id UInt32, name String) ENGINE = Memory"
+        )
+        rows = [(i, f"n{i}") for i in range(500)]
+        await client.execute("INSERT INTO native_atomic VALUES", *rows)
+        got = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_atomic ORDER BY id")
+        ]
+        assert got == rows
+        await client.execute("DROP TABLE IF EXISTS native_atomic")
+
     async def test_unsupported_type_raises(self):
         native = self._native_client()
         # Geo types (here Point) are not in the type mapping, so decoding must

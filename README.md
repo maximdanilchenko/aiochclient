@@ -183,6 +183,18 @@ feature, and the Native format does not carry a column's timezone, so a tz-aware
 `DateTime`/`DateTime64` comes back as a naive UTC `datetime` (TSV and RowBinary
 apply the timezone).
 
+A native INSERT streams its body as several Native blocks so the server can
+insert one while the client encodes the next (`insert_block_size` rows per block,
+default 8192). The flip side is that a multi-block insert is **not atomic** on a
+client-side encoding error — if a value somewhere in the rows fails to encode,
+the blocks already sent are committed. Inserts that fit in one block stay
+all-or-nothing; pass `insert_block_size=0` to always send a single atomic block
+(no overlap):
+
+```python
+client = ChClient(session, native=True, insert_block_size=0)  # atomic inserts
+```
+
 #### Speed
 
 Engine comparison on mixed-type rows, fully decoded, with the Cython extension

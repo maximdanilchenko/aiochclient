@@ -513,10 +513,11 @@ def encode_column(values, ctype):
     return b"".join(writer.write(value) for value in values)
 
 
-# Rows per streamed Native block on INSERT. Smaller blocks overlap the
-# server-side insert with the next block's encoding more finely, at the cost of
-# slightly more per-block framing; a few thousand rows is a good middle ground.
-_INSERT_BLOCK_ROWS = 4096
+# Default rows per streamed Native block on INSERT (the client exposes this as
+# ``insert_block_size``). Smaller blocks overlap the server-side insert with the
+# next block's encoding more finely, at the cost of slightly more per-block
+# framing and a smaller atomic unit; a few thousand rows is a good middle ground.
+_INSERT_BLOCK_ROWS = 8192
 
 
 def _encode_block(rows, names, wire_types):
@@ -545,14 +546,16 @@ async def rows_to_native_stream(rows, names, types, block_rows=_INSERT_BLOCK_ROW
     generator is async so it can be handed straight to the HTTP backends as a
     chunked request body.
 
-    Trade-off: an INSERT split this way is not atomic with respect to a
-    *client-side encoding* error — if encoding a later block raises, earlier
-    blocks may already have been sent. With valid, uniformly-typed rows this does
-    not occur (the first block would already have failed).
+    Trade-off: a body split into several blocks is **not atomic** on a
+    *client-side encoding* error. If encoding raises partway through (e.g. a
+    single out-of-range or wrong-typed value somewhere in the rows), the blocks
+    already yielded have been sent and inserted, so the table is left with a
+    partial result. ``rows`` that fit in one block (``len(rows) <= block_rows``)
+    are a single block and keep the all-or-nothing behaviour.
     """
     rows = [tuple(row) for row in rows]
     wire_types = [_wire_type(t) for t in types]
-    if not rows:
+    if len(rows) <= block_rows:
         yield _encode_block(rows, names, wire_types)
         return
     for start in range(0, len(rows), block_rows):

@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+Performance (Native engine):
+- **SELECT ~1M rows/sec**: the cyclic GC is suppressed while a fetch allocates
+  its result objects (none are garbage, they are all returned), and rows are
+  built via a compiled column transpose.
+- **INSERT ~+40%**: bulk column encoders (String/Date/DateTime) plus the body is
+  streamed as multiple Native blocks, so the server inserts one block while the
+  client encodes the next.
+
+New:
+- `insert_block_size` (default 8192) controls the Native-INSERT block size.
+
+Note:
+- A multi-block native INSERT is **not atomic** on a client-side *encoding*
+  error: blocks already streamed are committed before the error is raised.
+  Inserts that fit in one block stay all-or-nothing; pass `insert_block_size=0`
+  to always send a single atomic block (no streaming overlap).
+
 ## 2.8.0
 
 New — binary engines (both opt-in, TSV stays the default; pure-Python fallback
