@@ -44,6 +44,15 @@ class HttpClientABC(ABC):
         """Use aiochclient.exceptions.ChClientError in case of bad status code"""
 
     @abstractmethod
+    async def post_return_bytes(
+        self, url: str, params: dict, headers: dict, data: Any
+    ) -> AsyncGenerator[bytes, None]:
+        """Stream the raw response body as byte chunks (RowBinary engine).
+
+        Use aiochclient.exceptions.ChClientError in case of bad status code.
+        """
+
+    @abstractmethod
     async def post_no_return(
         self, url: str, params: dict, headers: dict, data: Any
     ) -> None:

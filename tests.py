@@ -4,7 +4,7 @@ import os
 from decimal import Decimal
 from enum import Enum, IntEnum
 from ipaddress import IPv4Address, IPv6Address
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import aiohttp
 import httpx
@@ -1397,6 +1397,131 @@ class TestInsertFile:
                 )
         # clean
         os.remove('test_data.csv')
+
+
+class TestRowBinaryDecode:
+    # https://github.com/maximdanilchenko/aiochclient/issues/134
+    # Golden value <-> bytes vectors captured from a live ClickHouse server,
+    # pinning the exact RowBinary wire format. No database needed.
+    GOLDEN = [
+        ("UInt8", "ff", 255),
+        ("UInt16", "0201", 258),
+        ("Int32", "feffffff", -2),
+        ("UInt64", "0100000000000000", 1),
+        ("Int128", "ff" * 16, -1),
+        ("Float32", "0000c03f", 1.5),
+        ("Float64", "000000000000f83f", 1.5),
+        ("Bool", "01", True),
+        ("String", "026869", "hi"),
+        ("String", "00", ""),
+        ("FixedString(4)", "61620000", "ab\x00\x00"),
+        ("Date", "0100", dt.date(1970, 1, 2)),
+        ("DateTime", "01000000", dt.datetime(1970, 1, 1, 0, 0, 1)),
+        ("DateTime64(3)", "6304000000000000", dt.datetime(1970, 1, 1, 0, 0, 1, 123000)),
+        ("DateTime64(9)", "7b00000000000000", dt.datetime(1970, 1, 1, 0, 0, 0, 0)),
+        ("Decimal(9, 2)", "7b000000", Decimal("1.23")),
+        ("Decimal(18, 4)", "3930000000000000", Decimal("1.2345")),
+        ("Decimal(38, 2)", "6affffffffffffffffffffffffffffff", Decimal("-1.50")),
+        (
+            "UUID",
+            "3843a816977ca41e44493764f4667e87",
+            UUID("1ea47c97-16a8-4338-877e-66f464374944"),
+        ),
+        ("IPv4", "8528fd74", IPv4Address("116.253.40.133")),
+        ("IPv6", "200144c8012926320033000002520002", IPv6Address("2001:44c8:129:2632:33:0:252:2")),
+        ("Enum8('a' = 1, 'b' = 2)", "02", "b"),
+        ("Nullable(UInt8)", "01", None),
+        ("Nullable(UInt8)", "0005", 5),
+        ("Array(UInt8)", "03010203", [1, 2, 3]),
+        ("Array(UInt8)", "00", []),
+        ("Array(String)", "020161026262", ["a", "bb"]),
+        ("Array(Array(UInt8))", "020201020103", [[1, 2], [3]]),
+        ("Array(Nullable(UInt8))", "030001010003", [1, None, 3]),
+        ("Tuple(UInt8, String)", "04026869", (4, "hi")),
+        ("Map(String, UInt8)", "02016101016202", {"a": 1, "b": 2}),
+        ("Map(String, UInt8)", "00", {}),
+        ("LowCardinality(String)", "026869", "hi"),
+    ]
+
+    async def test_golden_vectors(self):
+        from aiochclient.binary import Cursor
+        from aiochclient.types import what_py_type
+
+        for type_name, hex_bytes, expected in self.GOLDEN:
+            value = what_py_type(type_name).read(Cursor(bytes.fromhex(hex_bytes)))
+            assert value == expected, type_name
+            assert type(value) is type(expected), type_name
+
+    async def test_varint_boundaries(self):
+        from aiochclient.binary import Cursor
+
+        for raw, expected in [("7f", 127), ("8001", 128), ("ac02", 300)]:
+            assert Cursor(bytes.fromhex(raw)).read_varint() == expected
+
+    async def test_streaming_across_chunk_boundaries(self):
+        # A RowBinaryWithNamesAndTypes body fed one byte at a time must still
+        # reassemble into the right record (buffer-refill / re-parse path).
+        from aiochclient.binary import rows_from_binary
+
+        body = bytes.fromhex(
+            "02"  # 2 columns
+            "0161"  # name "a"
+            "026262"  # name "bb"
+            "0555496e7438"  # type "UInt8"
+            "06537472696e67"  # type "String"
+            "01"  # row: a = 1
+            "026869"  # row: bb = "hi"
+        )
+
+        async def one_byte_at_a_time():
+            for i in range(len(body)):
+                yield body[i : i + 1]
+
+        records = [r async for r in rows_from_binary(one_byte_at_a_time())]
+        assert len(records) == 1
+        assert records[0]["a"] == 1
+        assert records[0]["bb"] == "hi"
+
+
+@pytest.mark.usefixtures("class_chclient")
+class TestRowBinary:
+    # https://github.com/maximdanilchenko/aiochclient/issues/134
+    def _binary_client(self):
+        return ChClient(self.ch._http_client._session, binary=True)
+
+    @staticmethod
+    def _eq(tsv_value, bin_value):
+        # Float32 text (TSV) and the exact float32 bits (RowBinary) differ when
+        # widened to float64, so floats are compared with a tolerance.
+        if isinstance(tsv_value, float):
+            return bin_value == pytest.approx(tsv_value, rel=1e-6, abs=1e-6)
+        if isinstance(tsv_value, list) and tsv_value and isinstance(tsv_value[0], float):
+            return all(
+                b == pytest.approx(t, rel=1e-6, abs=1e-6)
+                for t, b in zip(tsv_value, bin_value)
+            )
+        return tsv_value == bin_value
+
+    async def test_all_types_match_tsv(self):
+        binary = self._binary_client()
+        tsv_rows = await self.ch.fetch("SELECT * FROM all_types ORDER BY uint8")
+        bin_rows = await binary.fetch("SELECT * FROM all_types ORDER BY uint8")
+        assert len(tsv_rows) == len(bin_rows)
+        for tsv_row, bin_row in zip(tsv_rows, bin_rows):
+            for key in tsv_row.keys():
+                assert self._eq(tsv_row[key], bin_row[key]), key
+
+    async def test_fetchval_and_iterate(self):
+        binary = self._binary_client()
+        assert await binary.fetchval("SELECT 123::UInt32") == 123
+        rows = [row[0] async for row in binary.iterate("SELECT number FROM numbers(3)")]
+        assert rows == [0, 1, 2]
+
+    async def test_single_column_empty_string(self):
+        # RowBinary length-prefixes strings, so an empty single-column value is
+        # unambiguous (unlike the TSV path, issue #14).
+        binary = self._binary_client()
+        assert (await binary.fetchrow("SELECT '' AS s"))["s"] == ""
 
 
 class TestErrorBody:

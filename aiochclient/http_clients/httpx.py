@@ -53,6 +53,17 @@ class HttpxHttpClient(HttpClientABC):
         )
         assert not buffer
 
+    async def post_return_bytes(
+        self, url: str, params: dict, headers: dict, data: Any
+    ) -> AsyncGenerator[bytes, None]:
+        resp = await self._session.post(
+            url=url, params=params, headers=headers, content=data
+        )
+        await _check_response(resp)
+        async for chunk in resp.aiter_bytes():
+            yield chunk
+        raise_if_exception_code(resp.headers.get(EXCEPTION_CODE_HEADER), [])
+
     async def post_no_return(
         self, url: str, params: dict, headers: dict, data: Any
     ) -> None:

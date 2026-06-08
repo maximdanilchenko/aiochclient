@@ -42,6 +42,16 @@ class Record(Mapping):
             self._converters = converters
             self._names = names
 
+    @classmethod
+    def from_decoded(cls, values: Tuple[Any], names: Dict[str, Any]) -> "Record":
+        """Build a record from already-decoded values (RowBinary path)."""
+        record = cls.__new__(cls)
+        record._row = values
+        record._decoded = True
+        record._converters = []
+        record._names = names
+        return record
+
     def __getitem__(self, key: Union[str, int, slice]) -> Any:
         self._decode()
         return self._getitem(key)

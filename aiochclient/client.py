@@ -4,6 +4,7 @@ from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Optional, Type
 
+from aiochclient.binary import rows_from_binary
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -57,7 +58,15 @@ class ChClient:
         Any settings from https://clickhouse.com/docs/en/operations/settings/settings
     """
 
-    __slots__ = ("_session", "url", "params", "headers", "_json", "_http_client")
+    __slots__ = (
+        "_session",
+        "url",
+        "params",
+        "headers",
+        "_json",
+        "_http_client",
+        "_binary",
+    )
 
     def __init__(
         self,
@@ -68,6 +77,7 @@ class ChClient:
         database: str = "default",
         compress_response: bool = False,
         json=json_,  # type: ignore
+        binary: bool = False,
         **settings,
     ):
         _http_client = HttpClientABC.choose_http_client(session)
@@ -84,6 +94,8 @@ class ChClient:
         if compress_response:
             self.params["enable_http_compression"] = 1
         self._json = json
+        # Decode SELECT results with the RowBinary engine instead of TSV.
+        self._binary = binary
         self.params.update(settings)
 
     async def __aenter__(self) -> 'ChClient':
@@ -152,7 +164,10 @@ class ChClient:
             is_json = True
 
         if not is_json and need_fetch:
-            query += " FORMAT TSVWithNamesAndTypes"
+            if self._binary:
+                query += " FORMAT RowBinaryWithNamesAndTypes"
+            else:
+                query += " FORMAT TSVWithNamesAndTypes"
 
         if args:
             if statement_type != 'INSERT':
@@ -173,6 +188,13 @@ class ChClient:
             params["query_id"] = query_id
 
         if need_fetch:
+            if self._binary and not is_json:
+                source = self._http_client.post_return_bytes(
+                    url=self.url, params=params, headers=self.headers, data=data
+                )
+                async for record in rows_from_binary(source):
+                    yield record
+                return
             response = self._http_client.post_return_lines(
                 url=self.url, params=params, headers=self.headers, data=data
             )
