@@ -45,6 +45,15 @@ class Cursor:
                 return result
             shift += 7
 
+    def read_int(self, size: int, signed: bool) -> int:
+        return int.from_bytes(self.read(size), "little", signed=signed)
+
+    def read_double(self) -> float:
+        return struct.unpack("<d", self.read(8))[0]
+
+    def read_float(self) -> float:
+        return struct.unpack("<f", self.read(4))[0]
+
 
 _TZ_UNSET = object()
 
@@ -298,7 +307,7 @@ class BoolType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> bool:
-        return cursor.read(1) != b"\x00"
+        return cursor.read_int(1, False) != 0
 
     def write(self, value: bool) -> bytes:
         return b"\x01" if value else b"\x00"
@@ -318,7 +327,7 @@ class IntType(BaseType):
 
     def read(self, cursor) -> int:
         size, signed = RB_INT_SPECS[self.name]
-        return int.from_bytes(cursor.read(size), "little", signed=signed)
+        return cursor.read_int(size, signed)
 
     def write(self, value: int) -> bytes:
         size, signed = RB_INT_SPECS[self.name]
@@ -334,8 +343,8 @@ class FloatType(IntType):
 
     def read(self, cursor) -> float:
         if self.name == "Float64":
-            return struct.unpack("<d", cursor.read(8))[0]
-        return struct.unpack("<f", cursor.read(4))[0]
+            return cursor.read_double()
+        return cursor.read_float()
 
     def write(self, value: float) -> bytes:
         if self.name == "Float64":
@@ -362,9 +371,7 @@ class DateType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.date:
-        return RB_EPOCH_DATE + dt.timedelta(
-            days=int.from_bytes(cursor.read(2), "little")
-        )
+        return RB_EPOCH_DATE + dt.timedelta(days=cursor.read_int(2, False))
 
     def write(self, value: dt.date) -> bytes:
         return (value - RB_EPOCH_DATE).days.to_bytes(2, "little")
@@ -402,7 +409,7 @@ class DateTimeType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.datetime:
-        seconds = int.from_bytes(cursor.read(4), "little")
+        seconds = cursor.read_int(4, False)
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + dt.timedelta(seconds=seconds)
@@ -453,7 +460,7 @@ class DateTime64Type(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.datetime:
-        ticks = int.from_bytes(cursor.read(8), "little", signed=True)
+        ticks = cursor.read_int(8, True)
         # Python datetime only supports microseconds; truncate finer precision.
         if self._precision <= 6:
             micros = ticks * 10 ** (6 - self._precision)
@@ -524,7 +531,7 @@ class IPv4Type(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> IPv4Address:
-        return IPv4Address(int.from_bytes(cursor.read(4), "little"))
+        return IPv4Address(cursor.read_int(4, False))
 
     def write(self, value) -> bytes:
         return int(IPv4Address(value)).to_bytes(4, "little")
@@ -791,8 +798,7 @@ class EnumType(StrType):
         self._reverse = {label: index for index, label in self._mapping.items()}
 
     def read(self, cursor) -> str:
-        index = int.from_bytes(cursor.read(self._size), "little", signed=True)
-        return self._mapping[index]
+        return self._mapping[cursor.read_int(self._size, True)]
 
     def write(self, value: str) -> bytes:
         return self._reverse[value].to_bytes(self._size, "little", signed=True)
@@ -824,7 +830,7 @@ class DecimalType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> Decimal:
-        raw = int.from_bytes(cursor.read(self._size), "little", signed=True)
+        raw = cursor.read_int(self._size, True)
         return Decimal(raw).scaleb(-self._scale)
 
     def write(self, value: Decimal) -> bytes:

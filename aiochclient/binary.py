@@ -14,15 +14,15 @@ from typing import Any, AsyncGenerator, Callable, List
 from aiochclient.exceptions import NeedMoreData
 from aiochclient.records import Record
 
-# The type objects carry the read/write logic (pure Python). The hot per-value
-# buffer access goes through the compiled Cursor when the Cython extension is
-# available, falling back to the pure-Python Cursor otherwise.
-from aiochclient.types import what_py_type
-
+# Use the compiled engine (Cursor, type objects with C-level read/write, and a
+# whole-row reader that avoids per-value Python dispatch) when the Cython
+# extension is built, falling back to the pure-Python implementations.
 try:
-    from aiochclient._types import Cursor
+    from aiochclient._types import Cursor, read_row as _read_row_native, what_py_type
 except ImportError:
-    from aiochclient.types import Cursor
+    from aiochclient.types import Cursor, what_py_type
+
+    _read_row_native = None
 
 
 def read_binary_str(cursor) -> bytes:
@@ -109,20 +109,17 @@ def rows_to_binary(rows, types: list) -> bytes:
 class RowBinaryFabric:
     """Builds :class:`Record` objects from RowBinary rows."""
 
-    __slots__ = ("names", "readers", "_read_row")
+    __slots__ = ("names", "types")
 
-    def __init__(self, names: List[str], types: List[str], convert: bool = True):
+    def __init__(self, names: List[str], types: List[str]):
         self.names = {name: index for index, name in enumerate(names)}
-        readers = [what_py_type(tp).read for tp in types]
-        self.readers = readers
-
-        def _read_row(cursor: Cursor) -> tuple:
-            return tuple(read(cursor) for read in readers)
-
-        self._read_row = _read_row
+        self.types = tuple(what_py_type(tp) for tp in types)
 
     def read_row(self, cursor: Cursor) -> tuple:
-        return self._read_row(cursor)
+        if _read_row_native is not None:
+            # Compiled whole-row read (no per-value Python dispatch).
+            return _read_row_native(cursor, self.types)
+        return tuple(tp.read(cursor) for tp in self.types)
 
     def new(self, values: tuple) -> Record:
         return Record.from_decoded(values, self.names)

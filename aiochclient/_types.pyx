@@ -1,9 +1,12 @@
 #cython: language_level=3
+import datetime as _dt
 import json
 import re
+import struct
 from decimal import Decimal
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
 from cpython.datetime cimport date, datetime
@@ -18,6 +21,7 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
+from libc.string cimport memcpy
 
 from aiochclient.exceptions import ChClientError, NeedMoreData
 
@@ -60,6 +64,97 @@ cdef class Cursor:
                 self.pos = pos
                 return result
             shift += 7
+
+    cpdef object read_int(self, int size, bint signed):
+        # Wider than 64 bits (Int128/256, Decimal128/256) -> python big-int.
+        if size > 8:
+            return int.from_bytes(self.read(size), "little", signed=signed)
+        cdef:
+            const unsigned char* data
+            Py_ssize_t pos = self.pos
+            uint64_t u = 0
+            int i
+        if pos + size > self.size:
+            raise NeedMoreData()
+        data = self.buf
+        for i in range(size):
+            u |= (<uint64_t>data[pos + i]) << (8 * i)
+        self.pos = pos + size
+        if signed:
+            if size < 8 and (u >> (size * 8 - 1)) & 1:
+                u |= (<uint64_t>0xFFFFFFFFFFFFFFFF) << (size * 8)
+            return <int64_t>u
+        return u
+
+    cpdef double read_double(self):
+        cdef double value
+        if self.pos + 8 > self.size:
+            raise NeedMoreData()
+        memcpy(&value, (<const char*>self.buf) + self.pos, 8)
+        self.pos += 8
+        return value
+
+    cpdef double read_float(self):
+        cdef float value
+        if self.pos + 4 > self.size:
+            raise NeedMoreData()
+        memcpy(&value, (<const char*>self.buf) + self.pos, 4)
+        self.pos += 4
+        return value
+
+
+# ---- RowBinary engine: base type with virtual read/write -------------------
+
+RB_EPOCH_DATE = _dt.date(1970, 1, 1)
+RB_EPOCH_DATETIME = _dt.datetime(1970, 1, 1)
+RB_EPOCH_UTC = _dt.datetime(1970, 1, 1, tzinfo=_dt.timezone.utc)
+_TZ_UNSET = object()
+
+
+cdef bytes rb_write_varint(unsigned long long value):
+    cdef bytearray out = bytearray()
+    cdef unsigned char byte
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+cdef str rb_parse_tz(str name):
+    cdef Py_ssize_t first, last
+    if "'" in name:
+        first = name.index("'")
+        last = name.rindex("'")
+        return name[first + 1:last].replace("\\", "")
+    return None
+
+
+cdef class _RBType:
+    """Base for the RowBinary read/write virtual dispatch."""
+
+    cdef object read(self, Cursor cursor):
+        raise ChClientError(
+            f"RowBinary decoding is not implemented for type '{type(self).__name__}'"
+        )
+
+    cpdef bytes write(self, value):
+        raise ChClientError(
+            f"RowBinary encoding is not implemented for type '{type(self).__name__}'"
+        )
+
+
+cpdef tuple read_row(Cursor cursor, tuple readers):
+    """Read one RowBinary row given the column type objects (fast dispatch)."""
+    cdef:
+        _RBType reader
+        list out = []
+    for reader in readers:
+        out.append(reader.read(cursor))
+    return tuple(out)
 
 
 cdef datetime _datetime_parse(str string):
@@ -236,7 +331,7 @@ cdef tuple _split_map_kv(str pair):
     return pair, ""
 
 
-cdef class StrType:
+cdef class StrType(_RBType):
 
     cdef:
         str name
@@ -262,8 +357,24 @@ cdef class StrType:
         # example, turn a literal ``\t`` into a tab or drop a trailing backslash.
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        cdef Py_ssize_t length
+        if self.name[0] == "F":  # FixedString(N)
+            length = int(self.name[12:-1])
+        else:
+            length = cursor.read_varint()
+        return cursor.read(length).decode()
 
-cdef class BoolType:
+    cpdef bytes write(self, value):
+        cdef bytes data = value.encode()
+        cdef Py_ssize_t length
+        if self.name[0] == "F":
+            length = int(self.name[12:-1])
+            return data[:length].ljust(length, b"\x00")
+        return rb_write_varint(len(data)) + data
+
+
+cdef class BoolType(_RBType):
 
     cdef:
         str name
@@ -284,8 +395,14 @@ cdef class BoolType:
     cpdef bint convert(self, bytes value):
         return self.p_type(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(1, False) != 0
 
-cdef class Int8Type:
+    cpdef bytes write(self, value):
+        return b"\x01" if value else b"\x00"
+
+
+cdef class Int8Type(_RBType):
 
     cdef:
         str name
@@ -301,8 +418,14 @@ cdef class Int8Type:
     cpdef int8_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(1, True)
 
-cdef class Int16Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(1, "little", signed=True)
+
+
+cdef class Int16Type(_RBType):
 
     cdef:
         str name
@@ -318,8 +441,14 @@ cdef class Int16Type:
     cpdef int16_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(2, True)
 
-cdef class Int32Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(2, "little", signed=True)
+
+
+cdef class Int32Type(_RBType):
 
     cdef:
         str name
@@ -335,8 +464,14 @@ cdef class Int32Type:
     cpdef int32_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(4, True)
 
-cdef class Int64Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(4, "little", signed=True)
+
+
+cdef class Int64Type(_RBType):
 
     cdef:
         str name
@@ -352,8 +487,14 @@ cdef class Int64Type:
     cpdef int64_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(8, True)
 
-cdef class Int128Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(8, "little", signed=True)
+
+
+cdef class Int128Type(_RBType):
 
     cdef:
         str name
@@ -369,8 +510,14 @@ cdef class Int128Type:
     cpdef int128 convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(16, True)
 
-cdef class Int256Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(16, "little", signed=True)
+
+
+cdef class Int256Type(_RBType):
 
     cdef:
         str name
@@ -386,8 +533,14 @@ cdef class Int256Type:
     cpdef convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(32, True)
 
-cdef class UInt8Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(32, "little", signed=True)
+
+
+cdef class UInt8Type(_RBType):
 
     cdef:
         str name
@@ -403,8 +556,14 @@ cdef class UInt8Type:
     cpdef uint8_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(1, False)
 
-cdef class UInt16Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(1, "little")
+
+
+cdef class UInt16Type(_RBType):
 
     cdef:
         str name
@@ -420,8 +579,14 @@ cdef class UInt16Type:
     cpdef uint16_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(2, False)
 
-cdef class UInt32Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(2, "little")
+
+
+cdef class UInt32Type(_RBType):
 
     cdef:
         str name
@@ -437,8 +602,14 @@ cdef class UInt32Type:
     cpdef uint32_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(4, False)
 
-cdef class UInt64Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(4, "little")
+
+
+cdef class UInt64Type(_RBType):
 
     cdef:
         str name
@@ -454,8 +625,14 @@ cdef class UInt64Type:
     cpdef uint64_t convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(8, False)
 
-cdef class UInt128Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(8, "little")
+
+
+cdef class UInt128Type(_RBType):
 
     cdef:
         str name
@@ -471,8 +648,14 @@ cdef class UInt128Type:
     cpdef uint128 convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(16, False)
 
-cdef class UInt256Type:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(16, "little")
+
+
+cdef class UInt256Type(_RBType):
 
     cdef:
         str name
@@ -488,8 +671,14 @@ cdef class UInt256Type:
     cpdef convert(self, bytes value):
         return int(value)
 
+    cdef object read(self, Cursor cursor):
+        return cursor.read_int(32, False)
 
-cdef class FloatType:
+    cpdef bytes write(self, value):
+        return int(value).to_bytes(32, "little")
+
+
+cdef class FloatType(_RBType):
 
     cdef:
         str name
@@ -505,8 +694,18 @@ cdef class FloatType:
     cpdef double convert(self, bytes value):
         return float(value)
 
+    cdef object read(self, Cursor cursor):
+        if self.name == "Float64":
+            return cursor.read_double()
+        return cursor.read_float()
 
-cdef class DateType:
+    cpdef bytes write(self, value):
+        if self.name == "Float64":
+            return struct.pack("<d", value)
+        return struct.pack("<f", value)
+
+
+cdef class DateType(_RBType):
 
     cdef:
         str name
@@ -532,16 +731,31 @@ cdef class DateType:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        return RB_EPOCH_DATE + _dt.timedelta(days=cursor.read_int(2, False))
 
-cdef class DateTimeType:
+    cpdef bytes write(self, value):
+        return (value - RB_EPOCH_DATE).days.to_bytes(2, "little")
+
+
+cdef class DateTimeType(_RBType):
 
     cdef:
         str name
         bint container
+        str _tz_name
+        object _tz
 
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
+        self._tz_name = rb_parse_tz(name)
+        self._tz = _TZ_UNSET
+
+    cdef object _zone(self):
+        if self._tz is _TZ_UNSET:
+            self._tz = ZoneInfo(self._tz_name) if self._tz_name else None
+        return self._tz
 
     cdef object _convert(self, str string):
         string = string.strip("'")
@@ -559,16 +773,42 @@ cdef class DateTimeType:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        seconds = cursor.read_int(4, False)
+        zone = self._zone()
+        if zone is None:
+            return RB_EPOCH_DATETIME + _dt.timedelta(seconds=seconds)
+        return _dt.datetime.fromtimestamp(seconds, zone).replace(tzinfo=None)
 
-cdef class DateTime64Type:
+    cpdef bytes write(self, value):
+        zone = self._zone()
+        if zone is None:
+            seconds = (value - RB_EPOCH_DATETIME) // _dt.timedelta(seconds=1)
+        else:
+            seconds = int(value.replace(tzinfo=zone).timestamp())
+        return int(seconds).to_bytes(4, "little")
+
+
+cdef class DateTime64Type(_RBType):
 
     cdef:
         str name
         bint container
+        int _precision
+        str _tz_name
+        object _tz
 
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
+        self._precision = int(name[name.index("(") + 1:].split(",")[0].split(")")[0])
+        self._tz_name = rb_parse_tz(name)
+        self._tz = _TZ_UNSET
+
+    cdef object _zone(self):
+        if self._tz is _TZ_UNSET:
+            self._tz = ZoneInfo(self._tz_name) if self._tz_name else None
+        return self._tz
 
     cdef object _convert(self, str string):
         string = string.strip("'")
@@ -586,8 +826,35 @@ cdef class DateTime64Type:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        ticks = cursor.read_int(8, True)
+        if self._precision <= 6:
+            micros = ticks * 10 ** (6 - self._precision)
+        else:
+            micros = ticks // 10 ** (self._precision - 6)
+        zone = self._zone()
+        if zone is None:
+            return RB_EPOCH_DATETIME + _dt.timedelta(microseconds=micros)
+        return (RB_EPOCH_UTC + _dt.timedelta(microseconds=micros)).astimezone(
+            zone
+        ).replace(tzinfo=None)
 
-cdef class TupleType:
+    cpdef bytes write(self, value):
+        zone = self._zone()
+        if zone is None:
+            micros = (value - RB_EPOCH_DATETIME) // _dt.timedelta(microseconds=1)
+        else:
+            micros = (value.replace(tzinfo=zone) - RB_EPOCH_UTC) // _dt.timedelta(
+                microseconds=1
+            )
+        if self._precision <= 6:
+            ticks = micros // 10 ** (6 - self._precision)
+        else:
+            ticks = micros * 10 ** (self._precision - 6)
+        return int(ticks).to_bytes(8, "little", signed=True)
+
+
+cdef class TupleType(_RBType):
 
     cdef:
         str name
@@ -598,11 +865,13 @@ cdef class TupleType:
         self.name = name
         self.container = container
         cdef str tps = RE_TUPLE.findall(name)[0]
-        self.types = tuple(what_py_type(tp.rpartition(" ")[2], container=True).p_type for tp in tps.split(","))
+        self.types = tuple(
+            what_py_type(tp.rpartition(" ")[2], container=True) for tp in tps.split(",")
+        )
 
     cdef tuple _convert(self, str string):
         return tuple(
-            tp(val)
+            tp.p_type(val)
             for tp, val in zip(self.types, seq_parser(string[1:-1]))
         )
 
@@ -612,8 +881,26 @@ cdef class TupleType:
     cpdef tuple convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        cdef:
+            _RBType tp
+            list out = []
+        for tp in self.types:
+            out.append(tp.read(cursor))
+        return tuple(out)
 
-cdef class MapType:
+    cpdef bytes write(self, value):
+        cdef:
+            _RBType tp
+            list parts = []
+            Py_ssize_t i = 0
+        for tp in self.types:
+            parts.append(tp.write(value[i]))
+            i += 1
+        return b"".join(parts)
+
+
+cdef class MapType(_RBType):
 
     cdef:
         str name
@@ -628,6 +915,28 @@ cdef class MapType:
         comma_index = tps.index(",")
         self.key_type = what_py_type(tps[:comma_index], container=True)
         self.value_type = what_py_type(tps[comma_index + 1:], container=True)
+
+    cdef object read(self, Cursor cursor):
+        cdef:
+            Py_ssize_t n = cursor.read_varint()
+            Py_ssize_t i
+            dict out = {}
+            _RBType k = <_RBType>self.key_type
+            _RBType v = <_RBType>self.value_type
+        for i in range(n):
+            key = k.read(cursor)
+            out[key] = v.read(cursor)
+        return out
+
+    cpdef bytes write(self, value):
+        cdef:
+            _RBType k = <_RBType>self.key_type
+            _RBType v = <_RBType>self.value_type
+            list parts = [rb_write_varint(len(value))]
+        for key in value:
+            parts.append(k.write(key))
+            parts.append(v.write(value[key]))
+        return b"".join(parts)
 
     cdef dict _convert(self, str string):
         cdef:
@@ -645,7 +954,7 @@ cdef class MapType:
         return self._convert(value.decode())
 
 
-cdef class ArrayType:
+cdef class ArrayType(_RBType):
 
     cdef:
         str name
@@ -659,6 +968,24 @@ cdef class ArrayType:
             RE_ARRAY.findall(name)[0], container=True
         )
 
+    cdef object read(self, Cursor cursor):
+        cdef:
+            Py_ssize_t n = cursor.read_varint()
+            Py_ssize_t i
+            list out = []
+            _RBType element = <_RBType>self.type
+        for i in range(n):
+            out.append(element.read(cursor))
+        return out
+
+    cpdef bytes write(self, value):
+        cdef:
+            _RBType element = <_RBType>self.type
+            list parts = [rb_write_varint(len(value))]
+        for elem in value:
+            parts.append(element.write(elem))
+        return b"".join(parts)
+
     cdef list _convert(self, str string):
         return [self.type.p_type(val) for val in seq_parser(string[1:-1])]
 
@@ -669,8 +996,8 @@ cdef class ArrayType:
         return self.p_type(value.decode())
 
 
-cdef class NestedType:
-    
+cdef class NestedType(_RBType):
+
     cdef:
         str name
         bint container
@@ -683,6 +1010,31 @@ cdef class NestedType:
             what_py_type(i.split()[1], container=True)
             for i in RE_NESTED.findall(name)[0].split(',')
         )
+
+    cdef object read(self, Cursor cursor):
+        cdef:
+            Py_ssize_t n = cursor.read_varint()
+            Py_ssize_t i
+            list out = []
+            _RBType tp
+        for i in range(n):
+            row = []
+            for tp in self.types:
+                row.append(tp.read(cursor))
+            out.append(tuple(row))
+        return out
+
+    cpdef bytes write(self, value):
+        cdef:
+            _RBType tp
+            list parts = [rb_write_varint(len(value))]
+            Py_ssize_t j
+        for row in value:
+            j = 0
+            for tp in self.types:
+                parts.append(tp.write(row[j]))
+                j += 1
+        return b"".join(parts)
 
     cdef list _convert(self, str string):
         return self.p_type(string)
@@ -699,7 +1051,7 @@ cdef class NestedType:
     cpdef list convert(self, bytes value):
         return self._convert(value.decode())
 
-cdef class NullableType:
+cdef class NullableType(_RBType):
 
     cdef:
         str name
@@ -710,6 +1062,16 @@ cdef class NullableType:
         self.name = name
         self.container = container
         self.type = what_py_type(RE_NULLABLE.findall(name)[0], container)
+
+    cdef object read(self, Cursor cursor):
+        if cursor.read(1) != b"\x00":
+            return None
+        return (<_RBType>self.type).read(cursor)
+
+    cpdef bytes write(self, value):
+        if value is None:
+            return b"\x01"
+        return b"\x00" + (<_RBType>self.type).write(value)
 
     cdef _convert(self, str string):
         if string == r"\N" or string == "NULL":
@@ -723,7 +1085,7 @@ cdef class NullableType:
         return self._convert(decode(value))
 
 
-cdef class NothingType:
+cdef class NothingType(_RBType):
 
     cdef:
         str name
@@ -739,8 +1101,14 @@ cdef class NothingType:
     cpdef void convert(self, bytes value):
         pass
 
+    cdef object read(self, Cursor cursor):
+        return None
 
-cdef class UUIDType:
+    cpdef bytes write(self, value):
+        return b""
+
+
+cdef class UUIDType(_RBType):
 
     cdef:
         str name
@@ -759,8 +1127,23 @@ cdef class UUIDType:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        cdef bytes data = cursor.read(16)
+        return UUID(
+            int=(int.from_bytes(data[:8], "little") << 64)
+            | int.from_bytes(data[8:], "little")
+        )
 
-cdef class IPv4Type:
+    cpdef bytes write(self, value):
+        if not isinstance(value, UUID):
+            value = UUID(str(value))
+        cdef object number = value.int
+        return (number >> 64).to_bytes(8, "little") + (
+            number & 0xFFFFFFFFFFFFFFFF
+        ).to_bytes(8, "little")
+
+
+cdef class IPv4Type(_RBType):
 
     cdef:
         str name
@@ -779,8 +1162,14 @@ cdef class IPv4Type:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        return IPv4Address(cursor.read_int(4, False))
 
-cdef class IPv6Type:
+    cpdef bytes write(self, value):
+        return int(IPv4Address(value)).to_bytes(4, "little")
+
+
+cdef class IPv6Type(_RBType):
 
     cdef:
         str name
@@ -799,8 +1188,14 @@ cdef class IPv6Type:
     cpdef object convert(self, bytes value):
         return self._convert(value.decode())
 
+    cdef object read(self, Cursor cursor):
+        return IPv6Address(cursor.read(16))
 
-cdef class LowCardinalityType:
+    cpdef bytes write(self, value):
+        return IPv6Address(value).packed
+
+
+cdef class LowCardinalityType(_RBType):
 
     cdef:
         str name
@@ -821,22 +1216,78 @@ cdef class LowCardinalityType:
     cpdef object convert(self, bytes value):
         return self._convert(decode(value))
 
+    cdef object read(self, Cursor cursor):
+        return (<_RBType>self.type).read(cursor)
 
-cdef class DecimalType:
+    cpdef bytes write(self, value):
+        return (<_RBType>self.type).write(value)
+
+
+cdef class DecimalType(_RBType):
 
     cdef:
         str name
         bint container
+        int _size
+        int _scale
 
     def __cinit__(self, str name, bint container):
         self.name = name
         self.container = container
+        cdef list nums = [int(n) for n in re.findall(r"\d+", name)]
+        cdef int precision
+        if name.startswith("Decimal("):
+            precision = nums[0]
+            self._scale = nums[1]
+        else:
+            precision = {
+                "Decimal32": 9,
+                "Decimal64": 18,
+                "Decimal128": 38,
+                "Decimal256": 76,
+            }[name.split("(")[0]]
+            self._scale = nums[-1]
+        self._size = (
+            4 if precision <= 9 else 8 if precision <= 18 else 16 if precision <= 38 else 32
+        )
 
     cpdef object p_type(self, str string):
         return Decimal(string)
 
     cpdef object convert(self, bytes value):
         return Decimal(value.decode())
+
+    cdef object read(self, Cursor cursor):
+        return Decimal(cursor.read_int(self._size, True)).scaleb(-self._scale)
+
+    cpdef bytes write(self, value):
+        return int(Decimal(value).scaleb(self._scale)).to_bytes(
+            self._size, "little", signed=True
+        )
+
+
+cdef class EnumType(StrType):
+    """Enum8/Enum16: TSV gives the label (handled by StrType); RowBinary gives
+    the signed integer index, mapped back to its label here."""
+
+    cdef:
+        int _size
+        dict _mapping
+        dict _reverse
+
+    def __cinit__(self, str name, bint container):
+        self._size = 1 if name.startswith("Enum8") else 2
+        self._mapping = {
+            int(num): label
+            for label, num in re.findall(r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name)
+        }
+        self._reverse = {label: index for index, label in self._mapping.items()}
+
+    cdef object read(self, Cursor cursor):
+        return self._mapping[cursor.read_int(self._size, True)]
+
+    cpdef bytes write(self, value):
+        return self._reverse[value].to_bytes(self._size, "little", signed=True)
 
 
 cdef dict CH_TYPES_MAPPING = {
@@ -845,8 +1296,8 @@ cdef dict CH_TYPES_MAPPING = {
     "UInt16": UInt16Type,
     "UInt32": UInt32Type,
     "UInt64": UInt64Type,
-    "UInt128": Int128Type,
-    "UInt256": Int256Type,
+    "UInt128": UInt128Type,
+    "UInt256": UInt256Type,
     "Int8": Int8Type,
     "Int16": Int16Type,
     "Int32": Int32Type,
@@ -857,8 +1308,8 @@ cdef dict CH_TYPES_MAPPING = {
     "Float64": FloatType,
     "String": StrType,
     "FixedString": StrType,
-    "Enum8": StrType,
-    "Enum16": StrType,
+    "Enum8": EnumType,
+    "Enum16": EnumType,
     "Date": DateType,
     "DateTime": DateTimeType,
     "DateTime64": DateTime64Type,
@@ -879,7 +1330,7 @@ cdef dict CH_TYPES_MAPPING = {
 }
 
 
-cdef what_py_type(str name, bint container = False):
+cpdef what_py_type(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     name = name.strip()
     try:
