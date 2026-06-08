@@ -104,6 +104,16 @@ async def fetch_column_types(source: AsyncGenerator[bytes, None]) -> list:
     return [what_py_type(tp) for tp in types]
 
 
+async def fetch_column_header(source: AsyncGenerator[bytes, None]):
+    """Read a (LIMIT 0) RowBinaryWithNamesAndTypes header -> (names, type strings).
+
+    The Native INSERT block needs the column names and raw type strings (not the
+    parsed type objects), so this returns the header verbatim.
+    """
+    reader = BinaryReader(source)
+    return await _read_header(reader)
+
+
 def rows_to_binary(rows, types: list) -> bytes:
     """Encode rows (iterables of column values) as a RowBinary body."""
     return b"".join(

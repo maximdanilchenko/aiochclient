@@ -1730,6 +1730,45 @@ class TestNative:
         assert tsv_rows == nat_rows
         await native.execute("DROP TABLE IF EXISTS native_ext")
 
+    async def test_insert_matches_tsv(self):
+        # Native INSERT (columnar write path) must store the same bytes as a
+        # plain TSV insert. Insert the identical rows both ways into twin tables
+        # and compare what comes back (read via TSV so the read engine is fixed).
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_w")
+        await native.execute("DROP TABLE IF EXISTS native_w_ref")
+        await native.execute(self.EXTENDED_DDL.replace("native_ext", "native_w"))
+        await native.execute("CREATE TABLE native_w_ref AS native_w")
+        rows = [
+            (
+                i,
+                Decimal("12.3400"),
+                dt.datetime(2021, 6, 1, 12, 30, 0, 123000),
+                "a" if i % 2 else "b",
+                UUID("12345678-1234-5678-1234-567812345678"),
+                IPv4Address("9.8.7.6"),
+                IPv6Address("::2"),
+                -170141183460469231731687303715884105727,
+                (i % 256, "hi"),
+                (i % 256, "yo"),
+                {"k": i},
+                [(1, "a"), (2, "b")],
+                (Decimal("5.50") if i % 2 else None),
+            )
+            for i in range(6)
+        ]
+        await native.execute("INSERT INTO native_w VALUES", *rows)  # native write
+        await self.ch.execute("INSERT INTO native_w_ref VALUES", *rows)  # TSV write
+        written = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_w ORDER BY id")
+        ]
+        reference = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_w_ref ORDER BY id")
+        ]
+        assert written == reference
+        await native.execute("DROP TABLE IF EXISTS native_w")
+        await native.execute("DROP TABLE IF EXISTS native_w_ref")
+
     async def test_unsupported_type_raises(self):
         native = self._native_client()
         # Geo types (here Point) are not in the type mapping, so decoding must

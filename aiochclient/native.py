@@ -9,8 +9,13 @@ one, which is what lets this engine rival the columnar C clients without numpy.
 """
 
 import array
+import datetime as dt
+import re
 import sys
+from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 from typing import AsyncGenerator
+from uuid import UUID
 
 from aiochclient.binary import (
     BinaryReader,
@@ -275,3 +280,177 @@ async def rows_from_native(
     async for block in blocks_from_native(source):
         for record in block:
             yield record
+
+
+# --------------------------------------------------------------------------- #
+# Native INSERT (columnar write path)
+# --------------------------------------------------------------------------- #
+
+# Epochs for the null-slot defaults below.
+_EPOCH_DATE = dt.date(1970, 1, 1)
+_EPOCH_DATETIME = dt.datetime(1970, 1, 1)
+
+
+def _write_varint(value):
+    """Encode an unsigned int as LEB128 (the Native length prefix)."""
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+def _write_str(value):
+    encoded = value.encode()
+    return _write_varint(len(encoded)) + encoded
+
+
+def _wire_type(ctype):
+    """Map a column type to the type declared (and encoded) in an INSERT block.
+
+    ClickHouse converts an INSERT block's columns to the table's types, so the
+    dictionary-encoded LowCardinality and the Nested sugar do not need to be
+    written natively: LowCardinality(T) is sent as T, and Nested(...) as the
+    Array(Tuple(...)) it is stored as. Containers are rewritten recursively.
+    """
+    if ctype.startswith("LowCardinality("):
+        return _wire_type(ctype[15:-1])
+    if ctype.startswith("Nested("):
+        return _wire_type("Array(Tuple(" + ctype[7:-1] + "))")
+    if ctype.startswith("Nullable("):
+        return "Nullable(" + _wire_type(ctype[9:-1]) + ")"
+    if ctype.startswith("Array("):
+        return "Array(" + _wire_type(ctype[6:-1]) + ")"
+    if ctype.startswith("Map("):
+        ktype, vtype = _split_args(ctype[4:-1])
+        return "Map(" + _wire_type(ktype) + ", " + _wire_type(vtype) + ")"
+    if ctype.startswith("Tuple("):
+        return (
+            "Tuple("
+            + ", ".join(_wire_element(s) for s in _split_args(ctype[6:-1]))
+            + ")"
+        )
+    return ctype
+
+
+def _wire_element(spec):
+    """Rewrite one (possibly ``name Type``) Tuple element to its wire form."""
+    etype = _element_type(spec)
+    if etype == spec:
+        return _wire_type(spec)
+    name = spec[: len(spec) - len(etype)].rstrip()
+    return name + " " + _wire_type(etype)
+
+
+def _zero_value(ctype):
+    """A valid default for an inner type, used to fill NULL slots.
+
+    In a Native Nullable column every row carries a value (the null map decides
+    which are NULL), so NULL positions still need encodable bytes; the value
+    itself is discarded on read.
+    """
+    if ctype.startswith("Array("):
+        return []
+    if ctype.startswith("Map("):
+        return {}
+    if ctype.startswith("Tuple("):
+        return tuple(_zero_value(_element_type(s)) for s in _split_args(ctype[6:-1]))
+    if ctype.startswith("Float"):
+        return 0.0
+    if ctype == "String" or ctype.startswith("FixedString"):
+        return ""
+    if ctype == "Bool":
+        return False
+    if ctype.startswith("DateTime"):
+        return _EPOCH_DATETIME
+    if ctype.startswith("Date"):
+        return _EPOCH_DATE
+    if ctype.startswith("Decimal"):
+        return Decimal(0)
+    if ctype == "UUID":
+        return UUID(int=0)
+    if ctype.startswith("IPv4"):
+        return IPv4Address(0)
+    if ctype.startswith("IPv6"):
+        return IPv6Address(0)
+    if ctype.startswith("Enum"):
+        match = re.search(r"'((?:[^'\\]|\\.)*)'", ctype)
+        return match.group(1) if match else ""
+    return 0  # Int/UInt of any width
+
+
+def _fill_nulls(values, inner):
+    """Replace None with a placeholder for the Nullable values sub-column."""
+    sample = next((v for v in values if v is not None), None)
+    if sample is None:
+        sample = _zero_value(inner)
+    return [sample if v is None else v for v in values]
+
+
+def encode_column(values, ctype):
+    """Encode a list of ``values`` as one Native column body of type ``ctype``."""
+    spec = _NUMERIC.get(ctype)
+    if spec is not None:
+        column = array.array(spec[0], values)
+        if not _LE:
+            column.byteswap()
+        return column.tobytes()
+    if ctype.startswith("Nullable("):
+        inner = ctype[9:-1]
+        flags = bytes(1 if v is None else 0 for v in values)
+        return flags + encode_column(_fill_nulls(values, inner), inner)
+    if ctype.startswith("Array("):
+        inner = ctype[6:-1]
+        offsets = array.array("Q")
+        flat = []
+        total = 0
+        for value in values:
+            total += len(value)
+            offsets.append(total)
+            flat.extend(value)
+        if not _LE:
+            offsets.byteswap()
+        return offsets.tobytes() + encode_column(flat, inner)
+    if ctype.startswith("Tuple("):
+        specs = [_element_type(s) for s in _split_args(ctype[6:-1])]
+        return b"".join(
+            encode_column([row[i] for row in values], etype)
+            for i, etype in enumerate(specs)
+        )
+    if ctype.startswith("Map("):
+        ktype, vtype = _split_args(ctype[4:-1])
+        offsets = array.array("Q")
+        keys = []
+        vals = []
+        total = 0
+        for mapping in values:
+            total += len(mapping)
+            offsets.append(total)
+            keys.extend(mapping.keys())
+            vals.extend(mapping.values())
+        if not _LE:
+            offsets.byteswap()
+        return (
+            offsets.tobytes() + encode_column(keys, ktype) + encode_column(vals, vtype)
+        )
+    # Scalar fallback: a Native column is its RowBinary per-value writes back to
+    # back (numerics excepted above for the array fast path).
+    writer = what_py_type(ctype)
+    return b"".join(writer.write(value) for value in values)
+
+
+def rows_to_native(rows, names, types):
+    """Encode ``rows`` (iterables of column values) as a single Native block."""
+    rows = [tuple(row) for row in rows]
+    wire_types = [_wire_type(t) for t in types]
+    parts = [_write_varint(len(names)), _write_varint(len(rows))]
+    columns = list(zip(*rows)) if rows else [() for _ in names]
+    for name, wire_type, column in zip(names, wire_types, columns):
+        parts.append(_write_str(name))
+        parts.append(_write_str(wire_type))
+        parts.append(encode_column(list(column), wire_type))
+    return b"".join(parts)
