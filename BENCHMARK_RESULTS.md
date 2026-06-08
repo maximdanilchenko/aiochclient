@@ -22,44 +22,50 @@ real-world-ish workload. Reproduce with `benchmarks_vs_libs.py`.
 
 - **Machine**: Apple M1 Pro, macOS (Darwin 23.6), CPython 3.11.
 - **ClickHouse**: 26.5 in Docker, local. HTTP on `:8123`, native TCP on `:9000`.
-- **Client versions**: aiochclient 2.7.0 + the RowBinary engine (with the Cython
-  extension built and `ciso8601` 2.3.3); clickhouse-connect 1.1.1;
-  clickhouse-driver 0.2.10; asynch 0.3.1; aiohttp 3.14.0.
+- **Client versions**: aiochclient 2.7.0 + the RowBinary and Native engines
+  (with the Cython extension built and `ciso8601` 2.3.3); clickhouse-connect
+  1.1.1; clickhouse-driver 0.2.10; asynch 0.3.1; aiohttp 3.14.0.
 
 ## Results (rows/sec, higher is better)
 
 | Client | Protocol | Async | SELECT (decode) | INSERT |
 |:-------|:---------|:-----:|----------------:|-------:|
-| **aiochclient — TSV** | HTTP | ✅ | ~265k | ~242k |
-| **aiochclient — RowBinary** | HTTP | ✅ | ~280k | ~310k |
-| clickhouse-connect | HTTP | ✅ | **~770k** | **~450k** |
-| asynch | native | ✅ | ~108k | ~158k |
-| clickhouse-driver | native | ❌ (sync) | ~455k | ~360k |
+| **aiochclient — Native** | HTTP | ✅ | **~730k** | ~330k |
+| **aiochclient — RowBinary** | HTTP | ✅ | ~370k | ~320k |
+| **aiochclient — TSV** | HTTP | ✅ | ~305k | ~245k |
+| clickhouse-connect | HTTP | ✅ | **~820k** | **~450k** |
+| asynch | native | ✅ | ~108k | ~165k |
+| clickhouse-driver | native | ❌ (sync) | ~440k | ~370k |
 
 Numbers are indicative (best-of-8; they vary ±10–20% run to run, INSERT more so)
 and depend on the data, the ClickHouse version and the machine.
 
 ## Takeaways
 
-- **clickhouse-connect is the fastest** here, by a wide margin on SELECT. It is
-  the official client and decodes ClickHouse's **columnar** binary format in a C
-  extension, transposing to rows in bulk — much cheaper than any row-by-row
-  approach. If raw throughput is the only goal, it's the one to beat.
-- **clickhouse-driver** (native protocol, C extensions) is the next fastest, but
-  it is **synchronous** — not usable as-is in an asyncio app without a thread
-  pool.
-- **aiochclient's RowBinary engine** is the fastest of the lightweight,
-  row-oriented **async** options: it beats its own TSV path on both directions
-  and is faster than `asynch` (the async native driver) here, while keeping the
-  small, dependency-light, streaming, lazy-decoding HTTP design.
-- **asynch** is the slowest on SELECT in this test despite using the native
-  protocol — its async row materialization appears to be the bottleneck.
+- **aiochclient's Native engine** is the fastest async option on SELECT here and
+  is within reach of clickhouse-connect — while keeping aiochclient's small,
+  dependency-light footprint (**no numpy**). It decodes ClickHouse's columnar
+  `Native` format whole-column-at-once: fixed-width numerics straight through the
+  stdlib `array` module, strings/dates in the compiled Cursor, then one transpose
+  to rows.
+- **clickhouse-connect is still the fastest** on SELECT (and INSERT). It is the
+  official client and decodes the columnar binary format in C on top of numpy;
+  the residual SELECT gap to aiochclient-Native is essentially the cost of
+  wrapping each row in aiochclient's richer `Record` object — the raw
+  column-decode-and-transpose throughput is comparable.
+- **clickhouse-driver** (native protocol, C extensions) is fast but
+  **synchronous** — not usable as-is in an asyncio app without a thread pool.
+  aiochclient-Native is faster than it on SELECT over plain HTTP.
+- **RowBinary** remains the best *row-oriented* engine (and the one used when
+  streaming row-by-row via `iterate`); **TSV** is the zero-Cython baseline.
+- **asynch** is the slowest on SELECT here despite the native protocol — its
+  async row materialization appears to be the bottleneck.
 
-### Where aiochclient could close the gap
+### Notes
 
-The remaining SELECT gap to clickhouse-connect is **columnar decoding**:
-aiochclient (and the native row drivers) decode row-by-row, while
-clickhouse-connect decodes whole columns at once in C. A columnar read path
-(e.g. ClickHouse's `Native` format) would be the architectural change needed to
-compete with it on raw read throughput — a possible future direction beyond the
-current RowBinary work.
+- The SELECT figures fully materialize every row (`row[:]`), so they measure
+  decode + `Record` construction, not lazy passthrough.
+- INSERT throughput is closer across clients: aiochclient-Native encodes numeric
+  columns in bulk via `array`, but variable-width / mixed columns still encode
+  per value, so its INSERT lands near RowBinary and clickhouse-driver rather than
+  ahead of them.

@@ -82,12 +82,16 @@ def best_sync(fn):
 
 
 # ---------------------------------------------------------------- aiochclient
-async def bench_aiochclient(binary):
+async def bench_aiochclient(engine):
     async with ClientSession() as session:
         prep = ChClient(session)
         await prep.execute("DROP TABLE IF EXISTS bench_libs")
         await prep.execute(DDL)
-        client = ChClient(session, binary=binary)
+        client = ChClient(
+            session,
+            binary=(engine == "rowbinary"),
+            native=(engine == "native"),
+        )
 
         # INSERT
         async def do_insert():
@@ -199,8 +203,9 @@ async def main():
             print(f"  {label:<32} ERROR: {type(exc).__name__}: {exc}")
 
     print(f"Benchmark: {ROWS} rows, best of {RETRIES} runs\n")
-    await run("aiochclient (HTTP, TSV)", lambda: bench_aiochclient(binary=False))
-    await run("aiochclient (HTTP, RowBinary)", lambda: bench_aiochclient(binary=True))
+    await run("aiochclient (HTTP, TSV)", lambda: bench_aiochclient("tsv"))
+    await run("aiochclient (HTTP, RowBinary)", lambda: bench_aiochclient("rowbinary"))
+    await run("aiochclient (HTTP, Native)", lambda: bench_aiochclient("native"))
     await run("clickhouse-connect (HTTP)", bench_clickhouse_connect)
     await run("asynch (native, async)", bench_asynch)
     await run(
