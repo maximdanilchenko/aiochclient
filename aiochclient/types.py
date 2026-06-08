@@ -8,7 +8,106 @@ from typing import Any, Callable, Generator, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.exceptions import ChClientError, NeedMoreData
+
+
+class Cursor:
+    """Synchronous forward cursor over a bytes buffer (RowBinary engine)."""
+
+    __slots__ = ("buf", "pos")
+
+    def __init__(self, buf: bytes = b"", pos: int = 0):
+        self.buf = buf
+        self.pos = pos
+
+    def read(self, n: int) -> bytes:
+        end = self.pos + n
+        if end > len(self.buf):
+            raise NeedMoreData
+        chunk = self.buf[self.pos : end]
+        self.pos = end
+        return chunk
+
+    def read_varint(self) -> int:
+        buf = self.buf
+        size = len(buf)
+        pos = self.pos
+        result = 0
+        shift = 0
+        while True:
+            if pos >= size:
+                raise NeedMoreData
+            byte = buf[pos]
+            pos += 1
+            result |= (byte & 0x7F) << shift
+            if not byte & 0x80:
+                self.pos = pos
+                return result
+            shift += 7
+
+    def read_int(self, size: int, signed: bool) -> int:
+        return int.from_bytes(self.read(size), "little", signed=signed)
+
+    def read_double(self) -> float:
+        return struct.unpack("<d", self.read(8))[0]
+
+    def read_float(self) -> float:
+        return struct.unpack("<f", self.read(4))[0]
+
+    # -- Native engine: whole-column bulk reads (pure-Python fallback) --
+
+    def read_string_column(self, n: int) -> list:
+        buf = self.buf
+        size = len(buf)
+        pos = self.pos
+        out = []
+        for _ in range(n):
+            length = 0
+            shift = 0
+            while True:
+                if pos >= size:
+                    raise NeedMoreData
+                byte = buf[pos]
+                pos += 1
+                length |= (byte & 0x7F) << shift
+                if not byte & 0x80:
+                    break
+                shift += 7
+            end = pos + length
+            if end > size:
+                raise NeedMoreData
+            out.append(buf[pos:end].decode())
+            pos = end
+        self.pos = pos
+        return out
+
+    def read_date_column(self, n: int) -> list:
+        buf = self.buf
+        pos = self.pos
+        end = pos + n * 2
+        if end > len(buf):
+            raise NeedMoreData
+        out = [
+            RB_EPOCH_DATE
+            + dt.timedelta(days=buf[pos + 2 * i] | (buf[pos + 2 * i + 1] << 8))
+            for i in range(n)
+        ]
+        self.pos = end
+        return out
+
+    def read_datetime_column(self, n: int) -> list:
+        buf = self.buf
+        pos = self.pos
+        end = pos + n * 4
+        if end > len(buf):
+            raise NeedMoreData
+        out = []
+        for i in range(n):
+            p = pos + 4 * i
+            secs = buf[p] | (buf[p + 1] << 8) | (buf[p + 2] << 16) | (buf[p + 3] << 24)
+            out.append(RB_EPOCH_DATETIME + dt.timedelta(seconds=secs))
+        self.pos = end
+        return out
 
 
 _TZ_UNSET = object()
@@ -24,6 +123,7 @@ def _parse_tz(name: str) -> Optional[str]:
     if "'" in name:
         return name[name.index("'") + 1 : name.rindex("'")].replace("\\", "")
     return None
+
 
 # RowBinary integer specs: name -> (byte width, signed). All little-endian.
 RB_INT_SPECS = {
@@ -57,6 +157,7 @@ def write_varint(value: int) -> bytes:
         else:
             out.append(byte)
             return bytes(out)
+
 
 try:
     import ciso8601
@@ -263,7 +364,7 @@ class BoolType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> bool:
-        return cursor.read(1) != b"\x00"
+        return cursor.read_int(1, False) != 0
 
     def write(self, value: bool) -> bytes:
         return b"\x01" if value else b"\x00"
@@ -283,7 +384,7 @@ class IntType(BaseType):
 
     def read(self, cursor) -> int:
         size, signed = RB_INT_SPECS[self.name]
-        return int.from_bytes(cursor.read(size), "little", signed=signed)
+        return cursor.read_int(size, signed)
 
     def write(self, value: int) -> bytes:
         size, signed = RB_INT_SPECS[self.name]
@@ -299,8 +400,8 @@ class FloatType(IntType):
 
     def read(self, cursor) -> float:
         if self.name == "Float64":
-            return struct.unpack("<d", cursor.read(8))[0]
-        return struct.unpack("<f", cursor.read(4))[0]
+            return cursor.read_double()
+        return cursor.read_float()
 
     def write(self, value: float) -> bytes:
         if self.name == "Float64":
@@ -327,9 +428,7 @@ class DateType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.date:
-        return RB_EPOCH_DATE + dt.timedelta(
-            days=int.from_bytes(cursor.read(2), "little")
-        )
+        return RB_EPOCH_DATE + dt.timedelta(days=cursor.read_int(2, False))
 
     def write(self, value: dt.date) -> bytes:
         return (value - RB_EPOCH_DATE).days.to_bytes(2, "little")
@@ -367,7 +466,7 @@ class DateTimeType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.datetime:
-        seconds = int.from_bytes(cursor.read(4), "little")
+        seconds = cursor.read_int(4, False)
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + dt.timedelta(seconds=seconds)
@@ -418,7 +517,7 @@ class DateTime64Type(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> dt.datetime:
-        ticks = int.from_bytes(cursor.read(8), "little", signed=True)
+        ticks = cursor.read_int(8, True)
         # Python datetime only supports microseconds; truncate finer precision.
         if self._precision <= 6:
             micros = ticks * 10 ** (6 - self._precision)
@@ -489,7 +588,7 @@ class IPv4Type(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> IPv4Address:
-        return IPv4Address(int.from_bytes(cursor.read(4), "little"))
+        return IPv4Address(cursor.read_int(4, False))
 
     def write(self, value) -> bytes:
         return int(IPv4Address(value)).to_bytes(4, "little")
@@ -616,10 +715,7 @@ class ArrayType(BaseType):
         self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
-        return [
-            self.type.p_type(val)
-            for val in self.seq_parser(string[1:-1])
-        ]
+        return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
 
     def convert(self, value: bytes) -> list:
         return self.p_type(value.decode())
@@ -749,15 +845,12 @@ class EnumType(StrType):
         self._size = 1 if name.startswith("Enum8") else 2
         self._mapping = {
             int(num): label
-            for label, num in re.findall(
-                r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name
-            )
+            for label, num in re.findall(r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name)
         }
         self._reverse = {label: index for index, label in self._mapping.items()}
 
     def read(self, cursor) -> str:
-        index = int.from_bytes(cursor.read(self._size), "little", signed=True)
-        return self._mapping[index]
+        return self._mapping[cursor.read_int(self._size, True)]
 
     def write(self, value: str) -> bytes:
         return self._reverse[value].to_bytes(self._size, "little", signed=True)
@@ -789,7 +882,7 @@ class DecimalType(BaseType):
         return self.p_type(value.decode())
 
     def read(self, cursor) -> Decimal:
-        raw = int.from_bytes(cursor.read(self._size), "little", signed=True)
+        raw = cursor.read_int(self._size, True)
         return Decimal(raw).scaleb(-self._scale)
 
     def write(self, value: Decimal) -> bytes:
@@ -876,6 +969,15 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
 def what_py_converter(name: str, container: bool = False) -> Callable:
     """Returns needed type class from clickhouse type name"""
     return what_py_type(name, container).convert
+
+
+def read_column(cursor, reader, n: int) -> list:
+    """Read n contiguous values of one scalar type (Native column fallback).
+
+    Pure-Python mirror of the compiled ``read_column``: a Native scalar column
+    is its RowBinary per-value encodings laid out back to back.
+    """
+    return [reader.read(cursor) for _ in range(n)]
 
 
 def py2ch(value):

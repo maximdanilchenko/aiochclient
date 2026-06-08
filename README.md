@@ -15,6 +15,7 @@ fully typed interface.
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Binary engines: RowBinary and Native](#binary-engines-rowbinary-and-native)
 - [Documentation](#documentation)
 - [Type Conversion](#type-conversion)
 - [Connection Pool Settings](#connection-pool-settings)
@@ -147,20 +148,66 @@ assert list(row.keys()) == ["a", "b"]
 assert list(row.values()) == [1, (dt.date(2018, 9, 8), 3.14)]
 ```
 
-### RowBinary engine (experimental)
+### Binary engines: RowBinary and Native
 
 By default results are encoded/decoded through ClickHouse's text (TSV) format.
-You can instead use the binary `RowBinary` engine, which avoids text escaping
-entirely and is typically faster, for both SELECT and INSERT:
+Two faster binary engines are available, each opt-in via a single flag; both use
+the Cython extension when it's built and fall back to pure Python otherwise.
+
+**`native=True`** — ClickHouse's column-oriented `Native` format, the fastest
+engine for SELECT. Whole columns are decoded at once (fixed-width numerics
+straight through the stdlib `array` module, strings/dates in the compiled
+Cursor), which rivals the C-extension clients while keeping aiochclient
+dependency-light — **no numpy**. INSERTs are encoded column-by-column into a
+single Native block.
 
 ```python
-client = ChClient(session, binary=True)
+client = ChClient(session, native=True)
 await client.execute("INSERT INTO t VALUES", (1, "a"), (2, "b"))
 rows = await client.fetch("SELECT * FROM t")
 ```
 
-Because RowBinary encoding is type-specific, a binary INSERT first looks up the
+**`binary=True`** — the row-oriented `RowBinary` format. Faster than TSV in both
+directions, and the right choice when streaming row-by-row with `iterate`.
+
+```python
+client = ChClient(session, binary=True)
+```
+
+Because binary encoding is type-specific, a binary INSERT first looks up the
 target column types (one lightweight query) and encodes the rows to match them.
+
+A couple of `native=True` caveats: `decode=False` (raw bytes) is a TSV-only
+feature, and the Native format does not carry a column's timezone, so a tz-aware
+`DateTime`/`DateTime64` comes back as a naive UTC `datetime` (TSV and RowBinary
+apply the timezone).
+
+#### Speed
+
+Engine comparison on mixed-type rows, fully decoded, with the Cython extension
+built:
+
+| Engine      | SELECT (decode) | INSERT         |
+|:------------|----------------:|---------------:|
+| `TSV`       | ~305k rows/sec  | ~245k rows/sec |
+| `RowBinary` | ~370k rows/sec  | ~320k rows/sec |
+| `Native`    | ~730k rows/sec  | ~330k rows/sec |
+
+Against the popular Python ClickHouse clients on the same workload, the Native
+engine is the fastest async SELECT option short of clickhouse-connect, and ahead
+of the synchronous clickhouse-driver:
+
+| Client                              | SELECT        | INSERT        |
+|:------------------------------------|--------------:|--------------:|
+| aiochclient — Native (HTTP, async)  | ~730k rows/sec | ~330k rows/sec |
+| clickhouse-connect (HTTP, async)    | ~820k rows/sec | ~450k rows/sec |
+| clickhouse-driver (native, sync)    | ~440k rows/sec | ~370k rows/sec |
+| asynch (native, async)              | ~108k rows/sec | ~165k rows/sec |
+
+Indicative best-of-8 figures (Apple M1 Pro, ClickHouse 26.5, single connection);
+they vary run to run and with the data. Full methodology lives in
+[BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md); reproduce with `benchmarks_vs_libs.py`
+(clients) and `benchmarks.py` (engines).
 
 ## Documentation
 

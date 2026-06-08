@@ -5,7 +5,13 @@ from enum import Enum
 from types import TracebackType
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Optional, Type
 
-from aiochclient.binary import fetch_column_types, rows_from_binary, rows_to_binary
+from aiochclient.binary import (
+    fetch_column_header,
+    fetch_column_types,
+    rows_from_binary,
+    rows_to_binary,
+)
+from aiochclient.native import blocks_from_native, rows_from_native, rows_to_native
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -67,6 +73,7 @@ class ChClient:
         "_json",
         "_http_client",
         "_binary",
+        "_native",
     )
 
     def __init__(
@@ -79,6 +86,7 @@ class ChClient:
         compress_response: bool = False,
         json=json_,  # type: ignore
         binary: bool = False,
+        native: bool = False,
         **settings,
     ):
         _http_client = HttpClientABC.choose_http_client(session)
@@ -95,8 +103,9 @@ class ChClient:
         if compress_response:
             self.params["enable_http_compression"] = 1
         self._json = json
-        # Decode SELECT results with the RowBinary engine instead of TSV.
+        # Decode SELECT results with the RowBinary / Native engine instead of TSV.
         self._binary = binary
+        self._native = native
         self.params.update(settings)
 
     async def __aenter__(self) -> 'ChClient':
@@ -165,7 +174,9 @@ class ChClient:
             is_json = True
 
         if not is_json and need_fetch:
-            if self._binary:
+            if self._native:
+                query += " FORMAT Native"
+            elif self._binary:
                 query += " FORMAT RowBinaryWithNamesAndTypes"
             else:
                 query += " FORMAT TSVWithNamesAndTypes"
@@ -176,11 +187,17 @@ class ChClient:
                     "It is possible to pass arguments only for INSERT queries"
                 )
 
-            if self._binary and not is_json:
+            if self._native and not is_json:
+                # Encode the rows column-by-column into a single Native block,
+                # using the target column names and types.
+                names, types = await self._fetch_insert_column_header(query)
+                query = self._columnar_insert_query(query, "Native")
+                data = rows_to_native(args, names, types)
+            elif self._binary and not is_json:
                 # RowBinary is type-specific, so fetch the target column types
                 # and encode the rows to match them exactly.
                 types = await self._fetch_insert_column_types(query)
-                query = self._rowbinary_insert_query(query)
+                query = self._columnar_insert_query(query, "RowBinary")
                 data = rows_to_binary(args, types)
             elif is_json:
                 data = json2ch(*args, dumps=self._json.dumps)
@@ -195,11 +212,12 @@ class ChClient:
             params["query_id"] = query_id
 
         if need_fetch:
-            if self._binary and not is_json:
+            if (self._native or self._binary) and not is_json:
                 source = self._http_client.post_return_bytes(
                     url=self.url, params=params, headers=self.headers, data=data
                 )
-                async for record in rows_from_binary(source):
+                driver = rows_from_native if self._native else rows_from_binary
+                async for record in driver(source):
                     yield record
                 return
             response = self._http_client.post_return_lines(
@@ -222,16 +240,48 @@ class ChClient:
                 url=self.url, params=params, headers=self.headers, data=data
             )
 
-    @staticmethod
-    def _rowbinary_insert_query(query: str) -> str:
-        # Swap the trailing ``VALUES`` for ``FORMAT RowBinary`` so the binary
-        # body is parsed as RowBinary rather than VALUES tuples.
-        head = re.sub(r"\s+VALUES\b.*$", "", query, flags=re.IGNORECASE | re.DOTALL)
-        return head.rstrip() + " FORMAT RowBinary"
+    def _native_block_stream(
+        self,
+        query: str,
+        params: Optional[Dict[str, Any]],
+        query_id: str,
+    ):
+        """Native-block source for a fetch-style query, or ``None`` if N/A.
 
-    async def _fetch_insert_column_types(self, query: str) -> list:
-        # RowBinary encoding depends on the exact column types, so look them up
-        # from the target table (in the order the INSERT lists them).
+        ``fetch`` collects a whole result into a list, so it can consume the
+        Native stream a block at a time and ``list.extend`` each block — keeping
+        the per-row work out of the (much costlier) async-generator protocol.
+        Returns ``None`` for queries that don't fetch in Native (so the caller
+        falls back to the generic row path).
+        """
+        query_params = self._prepare_query_params(params)
+        if query_params:
+            query = query.format(**query_params)
+        need_fetch, is_json, _ = self._parse_squery(query)
+        if not need_fetch or is_json:
+            return None
+        query += " FORMAT Native"
+        request_params = {**self.params}
+        if query_id is not None:
+            request_params["query_id"] = query_id
+        source = self._http_client.post_return_bytes(
+            url=self.url,
+            params=request_params,
+            headers=self.headers,
+            data=query.encode(),
+        )
+        return blocks_from_native(source)
+
+    @staticmethod
+    def _columnar_insert_query(query: str, fmt: str) -> str:
+        # Swap the trailing ``VALUES`` for ``FORMAT <fmt>`` so the binary body is
+        # parsed as RowBinary/Native rather than as VALUES tuples.
+        head = re.sub(r"\s+VALUES\b.*$", "", query, flags=re.IGNORECASE | re.DOTALL)
+        return head.rstrip() + f" FORMAT {fmt}"
+
+    def _insert_column_probe(self, query: str):
+        # Look up the target columns (in the order the INSERT lists them) via a
+        # LIMIT 0 probe; the header carries their names and exact types.
         match = re.match(
             r"\s*INSERT\s+INTO\s+(?P<table>[^\s(]+)\s*(?:\((?P<cols>[^)]*)\))?",
             query,
@@ -244,13 +294,18 @@ class ChClient:
             f"SELECT {cols.strip() if cols else '*'} "
             f"FROM {match.group('table')} LIMIT 0 FORMAT RowBinaryWithNamesAndTypes"
         )
-        source = self._http_client.post_return_bytes(
+        return self._http_client.post_return_bytes(
             url=self.url,
             params={**self.params},
             headers=self.headers,
             data=probe.encode(),
         )
-        return await fetch_column_types(source)
+
+    async def _fetch_insert_column_types(self, query: str) -> list:
+        return await fetch_column_types(self._insert_column_probe(query))
+
+    async def _fetch_insert_column_header(self, query: str):
+        return await fetch_column_header(self._insert_column_probe(query))
 
     async def execute(
         self,
@@ -321,6 +376,13 @@ class ChClient:
 
         :return: All rows from query.
         """
+        if self._native and not json and not args:
+            blocks = self._native_block_stream(query, params, query_id)
+            if blocks is not None:
+                result: List[Record] = []
+                async for block in blocks:
+                    result.extend(block)
+                return result
         return [
             row
             async for row in self._execute(

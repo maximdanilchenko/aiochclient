@@ -7,3 +7,7 @@ class ChClientError(Exception):
 
     - Clickhouse returns some errors.
     """
+
+
+class NeedMoreData(Exception):
+    """Internal signal: a RowBinary cursor ran out of buffered bytes."""

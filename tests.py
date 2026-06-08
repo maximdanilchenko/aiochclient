@@ -173,8 +173,7 @@ async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS test_cache")
     await chclient.execute("DROP TABLE IF EXISTS test_cache_mv")
     await chclient.execute("DROP TABLE IF EXISTS test_insert_file")
-    await chclient.execute(
-        """
+    await chclient.execute("""
     CREATE TABLE all_types (uint8 UInt8,
                             uint16 UInt16,
                             uint32 UInt32,
@@ -228,34 +227,27 @@ async def all_types_db(chclient, rows):
                             nested_int Nested(value1 Integer, value2 Integer),
                             nested_str_date Nested(value1 String, value2 Date)
                             ) ENGINE = Memory
-    """
-    )
-    await chclient.execute(
-        """
+    """)
+    await chclient.execute("""
         CREATE TABLE test_cache (
           key           String,
           int32Cache    AggregateFunction(avg, Int32),
           float32Cache  SimpleAggregateFunction(sum, Float64))
         ENGINE = AggregatingMergeTree()
         ORDER BY key
-        """
-    )
-    await chclient.execute(
-        """
+        """)
+    await chclient.execute("""
         CREATE MATERIALIZED VIEW test_cache_mv TO test_cache AS
           SELECT avgState(int32) AS int32Cache, sum(float32) AS float32Cache
           FROM all_types
-        """
-    )
-    await chclient.execute(
-        """
+        """)
+    await chclient.execute("""
         CREATE TABLE test_insert_file(
             uint32  UInt32,
             string  String,
             date    Date
         ) ENGINE = Memory
-        """
-    )
+        """)
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
 
@@ -267,6 +259,25 @@ def class_chclient(chclient, all_types_db, rows, request):
         2019, 1, 1, 3, 0
     )  # DateTime64 always returns datetime type
     request.cls.rows = [tuple(r) for r in cls_rows]
+
+
+@pytest.fixture(params=["tsv", "binary", "native"])
+def class_engine(request, chclient):
+    """Run the decoded type checks against each read engine.
+
+    ``self.engine_ch`` is the client whose decoded output is under test; it
+    shares ``chclient``'s session. The ``tsv`` case reuses ``chclient`` itself.
+    The raw-bytes (``decode=False``) assertions always stay on the TSV client,
+    since that path is TSV-only.
+    """
+    engine = request.param
+    request.cls.engine = engine
+    if engine == "binary":
+        request.cls.engine_ch = ChClient(chclient._http_client._session, binary=True)
+    elif engine == "native":
+        request.cls.engine_ch = ChClient(chclient._http_client._session, native=True)
+    else:
+        request.cls.engine_ch = chclient
 
 
 @pytest.mark.client
@@ -285,13 +296,36 @@ class TestClient:
 
 
 @pytest.mark.types
-@pytest.mark.usefixtures("class_chclient")
+@pytest.mark.usefixtures("class_chclient", "class_engine")
 class TestTypes:
+    # The Native format ships DateTime64 without its timezone, so a tz-aware
+    # column comes back as naive UTC and cannot match the tz-aware TSV value.
+    NATIVE_UNSUPPORTED = {"datetime64"}
+
+    # The binary engines decode Float32 from its exact 4-byte IEEE-754 value,
+    # whereas TSV ships ClickHouse's shorter text rounding (e.g. 23.432 vs
+    # 23.43199920654297). The expected values here are the TSV roundings, so
+    # this column is only comparable on the TSV engine.
+    NON_TSV_REPR = {"float32"}
+
+    def _skip_unsupported(self, field):
+        name = field.strip()
+        if self.engine != "tsv" and name in self.NON_TSV_REPR:
+            pytest.skip(f"'{name}' text rounding is TSV-specific")
+        if self.engine == "native" and name in self.NATIVE_UNSUPPORTED:
+            pytest.skip(f"Native engine does not decode '{name}' yet")
+
     async def select_field(self, field):
-        return await self.ch.fetchval(f"SELECT {field} FROM all_types WHERE uint8=1")
+        self._skip_unsupported(field)
+        return await self.engine_ch.fetchval(
+            f"SELECT {field} FROM all_types WHERE uint8=1"
+        )
 
     async def select_record(self, field):
-        return await self.ch.fetchrow(f"SELECT {field} FROM all_types WHERE uint8=1")
+        self._skip_unsupported(field)
+        return await self.engine_ch.fetchrow(
+            f"SELECT {field} FROM all_types WHERE uint8=1"
+        )
 
     async def select_field_bytes(self, field):
         return await self.ch.fetchval(
@@ -681,7 +715,7 @@ class TestTypes:
         record = await self.select_record_bytes("array_string")
         assert record[0] == result
         assert record["array_string"] == result
-    
+
     async def test_array_tuple(self):
         result = [("hello'", 3, "hello")]
         assert await self.select_field("array_tuple") == result
@@ -1428,7 +1462,11 @@ class TestRowBinaryDecode:
             UUID("1ea47c97-16a8-4338-877e-66f464374944"),
         ),
         ("IPv4", "8528fd74", IPv4Address("116.253.40.133")),
-        ("IPv6", "200144c8012926320033000002520002", IPv6Address("2001:44c8:129:2632:33:0:252:2")),
+        (
+            "IPv6",
+            "200144c8012926320033000002520002",
+            IPv6Address("2001:44c8:129:2632:33:0:252:2"),
+        ),
         ("Enum8('a' = 1, 'b' = 2)", "02", "b"),
         ("Nullable(UInt8)", "01", None),
         ("Nullable(UInt8)", "0005", 5),
@@ -1505,7 +1543,11 @@ class TestRowBinary:
         # widened to float64, so floats are compared with a tolerance.
         if isinstance(tsv_value, float):
             return bin_value == pytest.approx(tsv_value, rel=1e-6, abs=1e-6)
-        if isinstance(tsv_value, list) and tsv_value and isinstance(tsv_value[0], float):
+        if (
+            isinstance(tsv_value, list)
+            and tsv_value
+            and isinstance(tsv_value[0], float)
+        ):
             return all(
                 b == pytest.approx(t, rel=1e-6, abs=1e-6)
                 for t, b in zip(tsv_value, bin_value)
@@ -1536,8 +1578,7 @@ class TestRowBinary:
     async def test_insert_round_trip(self):
         binary = self._binary_client()
         await binary.execute("DROP TABLE IF EXISTS rb_insert")
-        await binary.execute(
-            """
+        await binary.execute("""
             CREATE TABLE rb_insert (
                 u8 UInt8, i64 Int64, f Float64, s String, fs FixedString(4),
                 d Date, dttm DateTime('UTC'),
@@ -1546,8 +1587,7 @@ class TestRowBinary:
                 e Enum8('a' = 1, 'b' = 2), arr Array(UInt8),
                 m Map(String, UInt8), nn Nullable(UInt8), tup Tuple(UInt8, String)
             ) ENGINE = Memory
-            """
-        )
+            """)
         row = (
             7,
             -5,
@@ -1587,6 +1627,154 @@ class TestRowBinary:
             3,
         )
         await binary.execute("DROP TABLE IF EXISTS rb_insert_cols")
+
+
+@pytest.mark.usefixtures("class_chclient")
+class TestNative:
+    # https://github.com/maximdanilchenko/aiochclient/issues/134
+    # The columnar Native read engine. Phase 1: numerics, String, FixedString,
+    # Date, DateTime (UTC), Bool, Nullable, Array. Phase 2 adds the scalar
+    # long-tail (Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256, ...) plus
+    # columnar Tuple and Map. Phase 3 adds LowCardinality and Nested (covered by
+    # the cross-engine TestTypes matrix).
+    NATIVE_DDL = """
+        CREATE TABLE native_t (
+            id UInt32, big Int64, neg Int16, score Float64, f32 Float32,
+            name String, fixed FixedString(4), created Date, ts DateTime,
+            flag Bool, opt Nullable(Int32), arr Array(UInt32), sarr Array(String)
+        ) ENGINE = Memory
+        """
+
+    def _native_client(self):
+        return ChClient(self.ch._http_client._session, native=True)
+
+    async def test_decode_matches_tsv(self):
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_t")
+        await native.execute(self.NATIVE_DDL)
+        rows = [
+            (
+                i,
+                i * 1_000_000_000,
+                -i,
+                i + 0.5,
+                1.5,
+                f"name {i}",
+                "abcd",
+                dt.date(2021, 6, 1),
+                dt.datetime(2021, 6, 1, 12, 30, 0),
+                bool(i % 2),
+                (i if i % 2 else None),
+                [1, 2, 3],
+                ["alpha", "beta"],
+            )
+            for i in range(5)
+        ]
+        await native.execute("INSERT INTO native_t VALUES", *rows)
+        tsv_rows = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_t ORDER BY id")
+        ]
+        bin_rows = [
+            r[:] for r in await native.fetch("SELECT * FROM native_t ORDER BY id")
+        ]
+        assert tsv_rows == bin_rows
+        await native.execute("DROP TABLE IF EXISTS native_t")
+
+    async def test_fetchval_iterate_and_mapping(self):
+        native = self._native_client()
+        assert await native.fetchval("SELECT 7::UInt32") == 7
+        record = await native.fetchrow("SELECT 1 AS a, 'x' AS b")
+        assert record["a"] == 1 and record["b"] == "x" and record[0] == 1
+        rows = [r[0] async for r in native.iterate("SELECT number FROM numbers(3)")]
+        assert rows == [0, 1, 2]
+
+    EXTENDED_DDL = """
+        CREATE TABLE native_ext (
+            id UInt32, dec Decimal(18, 4), ts64 DateTime64(3),
+            en Enum8('a' = 1, 'b' = 2), uid UUID, ip4 IPv4, ip6 IPv6,
+            big Int128, tup Tuple(UInt8, String), ntup Tuple(x UInt8, y String),
+            mp Map(String, UInt32), arr_tup Array(Tuple(UInt8, String)),
+            nl Nullable(Decimal(10, 2))
+        ) ENGINE = Memory
+        """
+
+    async def test_extended_types_match_tsv(self):
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_ext")
+        await native.execute(self.EXTENDED_DDL)
+        rows = [
+            (
+                i,
+                Decimal("3.1416"),
+                dt.datetime(2021, 6, 1, 12, 30, 0, 123000),
+                "b",
+                UUID("12345678-1234-5678-1234-567812345678"),
+                IPv4Address("1.2.3.4"),
+                IPv6Address("::1"),
+                170141183460469231731687303715884105727,
+                (7, "hi"),
+                (9, "yo"),
+                {"k1": 10, "k2": 20},
+                [(1, "a"), (2, "b")],
+                (Decimal("5.50") if i % 2 else None),
+            )
+            for i in range(4)
+        ]
+        await native.execute("INSERT INTO native_ext VALUES", *rows)
+        tsv_rows = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_ext ORDER BY id")
+        ]
+        nat_rows = [
+            r[:] for r in await native.fetch("SELECT * FROM native_ext ORDER BY id")
+        ]
+        assert tsv_rows == nat_rows
+        await native.execute("DROP TABLE IF EXISTS native_ext")
+
+    async def test_insert_matches_tsv(self):
+        # Native INSERT (columnar write path) must store the same bytes as a
+        # plain TSV insert. Insert the identical rows both ways into twin tables
+        # and compare what comes back (read via TSV so the read engine is fixed).
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_w")
+        await native.execute("DROP TABLE IF EXISTS native_w_ref")
+        await native.execute(self.EXTENDED_DDL.replace("native_ext", "native_w"))
+        await native.execute("CREATE TABLE native_w_ref AS native_w")
+        rows = [
+            (
+                i,
+                Decimal("12.3400"),
+                dt.datetime(2021, 6, 1, 12, 30, 0, 123000),
+                "a" if i % 2 else "b",
+                UUID("12345678-1234-5678-1234-567812345678"),
+                IPv4Address("9.8.7.6"),
+                IPv6Address("::2"),
+                -170141183460469231731687303715884105727,
+                (i % 256, "hi"),
+                (i % 256, "yo"),
+                {"k": i},
+                [(1, "a"), (2, "b")],
+                (Decimal("5.50") if i % 2 else None),
+            )
+            for i in range(6)
+        ]
+        await native.execute("INSERT INTO native_w VALUES", *rows)  # native write
+        await self.ch.execute("INSERT INTO native_w_ref VALUES", *rows)  # TSV write
+        written = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_w ORDER BY id")
+        ]
+        reference = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_w_ref ORDER BY id")
+        ]
+        assert written == reference
+        await native.execute("DROP TABLE IF EXISTS native_w")
+        await native.execute("DROP TABLE IF EXISTS native_w_ref")
+
+    async def test_unsupported_type_raises(self):
+        native = self._native_client()
+        # Geo types (here Point) are not in the type mapping, so decoding must
+        # raise a clear error rather than silently misread the column.
+        with pytest.raises(ChClientError):
+            await native.fetchval("SELECT (1.0, 2.0)::Point")
 
 
 class TestErrorBody:
