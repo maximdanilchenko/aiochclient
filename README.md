@@ -162,6 +162,27 @@ rows = await client.fetch("SELECT * FROM t")
 Because RowBinary encoding is type-specific, a binary INSERT first looks up the
 target column types (one lightweight query) and encodes the rows to match them.
 
+#### TSV vs RowBinary speed
+
+With the Cython extension built, `RowBinary` is faster than `TSV` for both
+decoding and encoding (and avoids text-escaping entirely):
+
+| Engine      | SELECT (decode) | INSERT       |
+|:------------|----------------:|-------------:|
+| `TSV`       | ~185k rows/sec  | ~125k rows/sec |
+| `RowBinary` | ~210k rows/sec  | ~170k rows/sec |
+
+These figures are indicative — they depend on the data, the ClickHouse version
+and the machine, and the gap is larger for string-heavy rows. Reproduce them
+with `benchmarks.py` (the `bench_formats` benchmark).
+
+How it was measured: a 10,000-row table of mixed types (ints, `Float32`,
+`String`, `FixedString`, `Date`, `DateTime`, `Enum16`, `Nullable`,
+`Array(String)`, `UUID`); SELECT timings fully decode every row, INSERT timings
+clear the table before each run; best-of/average over many sequential runs on a
+single connection (no async parallelism). Environment: Apple M1 Pro, macOS,
+CPython 3.11 with the Cython extension, ClickHouse 26.5 over local HTTP.
+
 ## Documentation
 
 To check out the [api docs](https://aiochclient.readthedocs.io/en/latest/api.html),
