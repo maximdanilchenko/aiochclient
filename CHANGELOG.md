@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.8.0
+
+New — binary engines (both opt-in, TSV stays the default; pure-Python fallback
+kept when the Cython extension isn't built):
+
+- **Native columnar engine** — `ChClient(session, native=True)`. Decodes (and
+  encodes) ClickHouse's column-oriented `Native` format whole-column-at-once,
+  the fastest engine for SELECT, without numpy. Full type coverage including
+  `LowCardinality` and `Nested`; columnar INSERT.
+- **RowBinary engine** — `ChClient(session, binary=True)`, with a
+  Cython-accelerated reader. Faster than TSV in both directions and the right
+  choice for row-by-row `iterate` streaming (#134, #139, #140).
+- Compiled `Record` (a `cdef` class) — cheaper to build, speeds up every engine.
+
+Notes:
+- `decode=False` (raw bytes) is a TSV-only feature.
+- The Native format carries no per-column timezone, so a tz-aware
+  `DateTime`/`DateTime64` is returned as a naive UTC `datetime` (TSV and
+  RowBinary apply the timezone).
+
 ## 2.7.0
 
 **Requires Python >= 3.10** (tested on 3.10–3.13).
