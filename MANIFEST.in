@@ -14,3 +14,4 @@ global-exclude *.obj
 prune docs/_build
 prune dev-requirements
 prune perf_iterations
+prune perf_insert

@@ -11,7 +11,11 @@ from aiochclient.binary import (
     rows_from_binary,
     rows_to_binary,
 )
-from aiochclient.native import blocks_from_native, rows_from_native, rows_to_native
+from aiochclient.native import (
+    blocks_from_native,
+    rows_from_native,
+    rows_to_native_stream,
+)
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -192,7 +196,9 @@ class ChClient:
                 # using the target column names and types.
                 names, types = await self._fetch_insert_column_header(query)
                 query = self._columnar_insert_query(query, "Native")
-                data = rows_to_native(args, names, types)
+                # Stream the body as multiple Native blocks so the server inserts
+                # one while the client encodes the next.
+                data = rows_to_native_stream(args, names, types)
             elif self._binary and not is_json:
                 # RowBinary is type-specific, so fetch the target column types
                 # and encode the rows to match them exactly.

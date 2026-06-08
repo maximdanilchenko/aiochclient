@@ -1702,6 +1702,28 @@ cpdef Record record_new(tuple values, dict names):
     return record
 
 
+cpdef bytes write_string_column(list values):
+    """Encode a String column body (varint-prefixed UTF-8) in one C loop.
+
+    The per-value RowBinary writer plus ``b"".join`` is the dominant cost of a
+    Native INSERT for string-heavy data; appending straight into one bytearray
+    avoids the intermediate per-row ``bytes`` objects and the join.
+    """
+    cdef:
+        bytearray out = bytearray()
+        Py_ssize_t i, n = len(values), length
+        bytes data
+    for i in range(n):
+        data = PyUnicode_AsEncodedString(<object>PyList_GET_ITEM(values, i), NULL, NULL)
+        length = len(data)
+        while length >= 0x80:
+            out.append((length & 0x7F) | 0x80)
+            length >>= 7
+        out.append(length)
+        out += data
+    return bytes(out)
+
+
 cpdef list build_records(list columns, dict names):
     """Transpose decoded ``columns`` into a list of :class:`Record` rows.
 

@@ -30,10 +30,10 @@ real-world-ish workload. Reproduce with `benchmarks_vs_libs.py`.
 
 | Client | Protocol | Async | SELECT (decode) | INSERT |
 |:-------|:---------|:-----:|----------------:|-------:|
-| **aiochclient — Native** | HTTP | ✅ | **~1,000k** | ~330k |
+| **aiochclient — Native** | HTTP | ✅ | **~1,000k** | **~450k** |
 | **aiochclient — RowBinary** | HTTP | ✅ | ~370k | ~320k |
 | **aiochclient — TSV** | HTTP | ✅ | ~305k | ~245k |
-| clickhouse-connect | HTTP | ✅ | ~820k | **~450k** |
+| clickhouse-connect | HTTP | ✅ | ~820k | ~400k |
 | asynch | native | ✅ | ~108k | ~165k |
 | clickhouse-driver | native | ❌ (sync) | ~440k | ~370k |
 
@@ -70,7 +70,8 @@ though the ordering holds.
   GC while a fetch allocates its tens of thousands of result objects** — none of
   which are garbage. The collector is disabled only for the synchronous,
   `await`-free decode/build sections and restored afterwards.
-- INSERT throughput is closer across clients: aiochclient-Native encodes numeric
-  columns in bulk via `array`, but variable-width / mixed columns still encode
-  per value, so its INSERT lands near RowBinary and clickhouse-driver rather than
-  ahead of them.
+- On INSERT, aiochclient-Native encodes columns in bulk (numerics via `array`,
+  strings/dates via dedicated encoders) and **streams the body as Native blocks**,
+  so the server inserts one block while the client encodes the next. This
+  overlap is the bulk of the INSERT win (~+40% over a single-blob insert) and
+  puts it ahead of the other clients here.

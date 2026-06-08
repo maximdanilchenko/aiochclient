@@ -158,8 +158,9 @@ the Cython extension when it's built and fall back to pure Python otherwise.
 engine for SELECT. Whole columns are decoded at once (fixed-width numerics
 straight through the stdlib `array` module, strings/dates in the compiled
 Cursor), which rivals the C-extension clients while keeping aiochclient
-dependency-light — **no numpy**. INSERTs are encoded column-by-column into a
-single Native block.
+dependency-light — **no numpy**. INSERTs are encoded column-by-column and
+streamed as Native blocks, so the server inserts one block while the client
+encodes the next.
 
 ```python
 client = ChClient(session, native=True)
@@ -187,20 +188,20 @@ apply the timezone).
 Engine comparison on mixed-type rows, fully decoded, with the Cython extension
 built:
 
-| Engine      | SELECT (decode) | INSERT          |
-|:------------|----------------:|----------------:|
-| `TSV`       | ~305k rows/sec  | ~245k rows/sec  |
-| `RowBinary` | ~370k rows/sec  | ~320k rows/sec  |
-| `Native`    | ~1,000k rows/sec | ~330k rows/sec |
+| Engine      | SELECT (decode)  | INSERT          |
+|:------------|-----------------:|----------------:|
+| `TSV`       | ~305k rows/sec   | ~245k rows/sec  |
+| `RowBinary` | ~370k rows/sec   | ~320k rows/sec  |
+| `Native`    | ~1,000k rows/sec | ~450k rows/sec  |
 
 Against the popular Python ClickHouse clients on the same workload, the Native
-engine is the fastest SELECT, ahead of clickhouse-connect and of the synchronous
-clickhouse-driver:
+engine is the fastest on both SELECT and INSERT, ahead of clickhouse-connect and
+of the synchronous clickhouse-driver:
 
-| Client                              | SELECT          | INSERT         |
-|:------------------------------------|----------------:|---------------:|
-| aiochclient — Native (HTTP, async)  | ~1,000k rows/sec | ~330k rows/sec |
-| clickhouse-connect (HTTP, async)    | ~820k rows/sec   | ~450k rows/sec |
+| Client                              | SELECT           | INSERT         |
+|:------------------------------------|-----------------:|---------------:|
+| aiochclient — Native (HTTP, async)  | ~1,000k rows/sec | ~450k rows/sec |
+| clickhouse-connect (HTTP, async)    | ~820k rows/sec   | ~400k rows/sec |
 | clickhouse-driver (native, sync)    | ~440k rows/sec   | ~370k rows/sec |
 | asynch (native, async)              | ~108k rows/sec   | ~165k rows/sec |
 
