@@ -46,6 +46,10 @@ for _t, (_c, _w) in _NUMERIC.items():
     assert array.array(_c).itemsize == _w, _t  # platform sanity check
 
 
+# LowCardinality index width: the flags word's low byte selects the key type.
+_LC_INDEX_TYPE = {0: "UInt8", 1: "UInt16", 2: "UInt32", 3: "UInt64"}
+
+
 def _split_args(spec):
     """Split a comma-separated type-argument list at the top level.
 
@@ -99,8 +103,41 @@ def _element_type(spec):
     return spec
 
 
+def _read_prefix(cursor, ctype):
+    """Consume the column's serialization-state prefix.
+
+    Before the column body, ClickHouse writes a UInt64 key-serialization
+    version for every LowCardinality found anywhere in the type tree
+    (depth-first). For a top-level LowCardinality this byte run sits right in
+    front of its body, but inside an Array/Map/Tuple it is hoisted ahead of the
+    offsets — so the prefix must be read as a separate pass over the type tree.
+    """
+    if ctype.startswith("LowCardinality("):
+        cursor.read(8)  # KeysSerializationVersion (always 1)
+        _read_prefix(cursor, ctype[15:-1])
+    elif ctype.startswith("Array("):
+        _read_prefix(cursor, ctype[6:-1])
+    elif ctype.startswith("Nullable("):
+        _read_prefix(cursor, ctype[9:-1])
+    elif ctype.startswith("Nested("):
+        _read_prefix(cursor, "Tuple(" + ctype[7:-1] + ")")
+    elif ctype.startswith("Tuple("):
+        for spec in _split_args(ctype[6:-1]):
+            _read_prefix(cursor, _element_type(spec))
+    elif ctype.startswith("Map("):
+        ktype, vtype = _split_args(ctype[4:-1])
+        _read_prefix(cursor, ktype)
+        _read_prefix(cursor, vtype)
+
+
+def decode_column_with_prefix(cursor, n, ctype):
+    """Read a whole top-level column: its state prefix, then its body."""
+    _read_prefix(cursor, ctype)
+    return decode_column(cursor, n, ctype)
+
+
 def decode_column(cursor, n, ctype):
-    """Decode one column of ``n`` values from the cursor."""
+    """Decode the body of one column of ``n`` values from the cursor."""
     spec = _NUMERIC.get(ctype)
     if spec is not None:
         code, width = spec
@@ -160,11 +197,31 @@ def decode_column(cursor, n, ctype):
             out.append(dict(zip(keys[prev:offset], values[prev:offset])))
             prev = offset
         return out
-    if ctype.startswith("LowCardinality(") or ctype.startswith("Nested("):
-        raise ChClientError(
-            f"Native decoding is not yet implemented for type '{ctype}' "
-            f"(use binary=True or the default TSV engine)"
-        )
+    if ctype.startswith("LowCardinality("):
+        # Per block, a LowCardinality column is: a UInt64 key-serialization
+        # version, a UInt64 flags word (its low byte selects the index width),
+        # the dictionary (a UInt64 size then that many inner values), and finally
+        # a UInt64 index count and that many indexes into the dictionary.
+        inner = ctype[15:-1]
+        nullable = inner.startswith("Nullable(")
+        dict_type = inner[9:-1] if nullable else inner
+        # The UInt64 key-serialization version was already consumed by the
+        # column's prefix pass (see _read_prefix); the body starts at the flags.
+        flags = int.from_bytes(cursor.read(8), "little")
+        index_type = _LC_INDEX_TYPE[flags & 0xFF]
+        dict_size = int.from_bytes(cursor.read(8), "little")
+        dictionary = decode_column(cursor, dict_size, dict_type)
+        num_keys = int.from_bytes(cursor.read(8), "little")
+        indexes = decode_column(cursor, num_keys, index_type)
+        if nullable:
+            # Index 0 is reserved for NULL (its dictionary slot is a placeholder).
+            return [None if i == 0 else dictionary[i] for i in indexes]
+        return [dictionary[i] for i in indexes]
+    if ctype.startswith("Nested("):
+        # With flatten_nested=0 a Nested column is laid out exactly like
+        # Array(Tuple(...)) of its sub-fields (shared offsets, then each field
+        # as a flat sub-column), so decode it as such.
+        return decode_column(cursor, n, "Array(Tuple(" + ctype[7:-1] + "))")
     # Generic per-value fallback through the compiled RowBinary readers — covers
     # Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256 and any other
     # fixed-layout scalar whose Native column is its RowBinary values back to back.
@@ -200,7 +257,9 @@ async def blocks_from_native(
             ctype = (await reader.parse(read_binary_str)).decode()
             columns.append(
                 await reader.parse(
-                    lambda cursor, ct=ctype, nr=num_rows: decode_column(cursor, nr, ct)
+                    lambda cursor, ct=ctype, nr=num_rows: decode_column_with_prefix(
+                        cursor, nr, ct
+                    )
                 )
             )
         if not num_rows:

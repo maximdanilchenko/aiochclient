@@ -298,21 +298,9 @@ class TestClient:
 @pytest.mark.types
 @pytest.mark.usefixtures("class_chclient", "class_engine")
 class TestTypes:
-    # Columns the Native engine cannot decode yet: LowCardinality uses a
-    # dictionary-encoded layout and Nested a columnar one (both phase 3), and
-    # the Native format ships DateTime64 without its timezone (returned as naive
-    # UTC, so it cannot match the tz-aware TSV/RowBinary value).
-    NATIVE_UNSUPPORTED = {
-        "low_cardinality_str",
-        "low_cardinality_nullable_str",
-        "low_cardinality_int",
-        "low_cardinality_date",
-        "low_cardinality_datetime",
-        "array_low_cardinality_string",
-        "nested_int",
-        "nested_str_date",
-        "datetime64",
-    }
+    # The Native format ships DateTime64 without its timezone, so a tz-aware
+    # column comes back as naive UTC and cannot match the tz-aware TSV value.
+    NATIVE_UNSUPPORTED = {"datetime64"}
 
     # The binary engines decode Float32 from its exact 4-byte IEEE-754 value,
     # whereas TSV ships ClickHouse's shorter text rounding (e.g. 23.432 vs
@@ -1647,7 +1635,8 @@ class TestNative:
     # The columnar Native read engine. Phase 1: numerics, String, FixedString,
     # Date, DateTime (UTC), Bool, Nullable, Array. Phase 2 adds the scalar
     # long-tail (Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256, ...) plus
-    # columnar Tuple and Map.
+    # columnar Tuple and Map. Phase 3 adds LowCardinality and Nested (covered by
+    # the cross-engine TestTypes matrix).
     NATIVE_DDL = """
         CREATE TABLE native_t (
             id UInt32, big Int64, neg Int16, score Float64, f32 Float32,
@@ -1743,10 +1732,10 @@ class TestNative:
 
     async def test_unsupported_type_raises(self):
         native = self._native_client()
-        # LowCardinality uses a dictionary-encoded columnar layout that the
-        # Native engine does not decode yet (Phase 3).
+        # Geo types (here Point) are not in the type mapping, so decoding must
+        # raise a clear error rather than silently misread the column.
         with pytest.raises(ChClientError):
-            await native.fetchval("SELECT toLowCardinality('x')")
+            await native.fetchval("SELECT (1.0, 2.0)::Point")
 
 
 class TestErrorBody:
