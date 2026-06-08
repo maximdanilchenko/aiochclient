@@ -11,7 +11,12 @@ from aiochclient.binary import (
     rows_from_binary,
     rows_to_binary,
 )
-from aiochclient.native import blocks_from_native, rows_from_native, rows_to_native
+from aiochclient.native import (
+    blocks_from_native,
+    rows_from_native,
+    rows_to_native,
+    rows_to_native_stream,
+)
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -74,6 +79,7 @@ class ChClient:
         "_http_client",
         "_binary",
         "_native",
+        "_insert_block_size",
     )
 
     def __init__(
@@ -87,6 +93,7 @@ class ChClient:
         json=json_,  # type: ignore
         binary: bool = False,
         native: bool = False,
+        insert_block_size: int = 8192,
         **settings,
     ):
         _http_client = HttpClientABC.choose_http_client(session)
@@ -106,6 +113,12 @@ class ChClient:
         # Decode SELECT results with the RowBinary / Native engine instead of TSV.
         self._binary = binary
         self._native = native
+        # Rows per streamed Native-INSERT block. Streaming overlaps the
+        # server-side insert with the next block's encoding, but a multi-block
+        # body is not atomic on a client-side encoding error. Set to 0 to send
+        # one atomic block instead (no overlap). Inserts of fewer rows than this
+        # are a single block regardless, so they stay atomic.
+        self._insert_block_size = insert_block_size
         self.params.update(settings)
 
     async def __aenter__(self) -> 'ChClient':
@@ -192,7 +205,15 @@ class ChClient:
                 # using the target column names and types.
                 names, types = await self._fetch_insert_column_header(query)
                 query = self._columnar_insert_query(query, "Native")
-                data = rows_to_native(args, names, types)
+                if self._insert_block_size:
+                    # Stream the body as multiple Native blocks so the server
+                    # inserts one while the client encodes the next.
+                    data = rows_to_native_stream(
+                        args, names, types, self._insert_block_size
+                    )
+                else:
+                    # One atomic block: encode fully, then send.
+                    data = rows_to_native(args, names, types)
             elif self._binary and not is_json:
                 # RowBinary is type-specific, so fetch the target column types
                 # and encode the rows to match them exactly.

@@ -33,6 +33,24 @@ try:
 except ImportError:
     from aiochclient.types import Cursor  # noqa: F401
 
+# Compiled String-column encoder; pure-Python fallback below.
+try:
+    from aiochclient._types import write_string_column
+except ImportError:
+
+    def write_string_column(values):
+        out = bytearray()
+        for value in values:
+            data = value.encode()
+            length = len(data)
+            while length >= 0x80:
+                out.append((length & 0x7F) | 0x80)
+                length >>= 7
+            out.append(length)
+            out += data
+        return bytes(out)
+
+
 # Compiled transpose+Record builder; pure-Python fallback below.
 try:
     from aiochclient._types import build_records
@@ -320,9 +338,10 @@ async def rows_from_native(
 # Native INSERT (columnar write path)
 # --------------------------------------------------------------------------- #
 
-# Epochs for the null-slot defaults below.
+# Epochs for the null-slot defaults and the bulk Date/DateTime encoders.
 _EPOCH_DATE = dt.date(1970, 1, 1)
 _EPOCH_DATETIME = dt.datetime(1970, 1, 1)
+_ONE_SECOND = dt.timedelta(seconds=1)
 
 
 def _write_varint(value):
@@ -433,6 +452,23 @@ def encode_column(values, ctype):
         if not _LE:
             column.byteswap()
         return column.tobytes()
+    if ctype == "String":
+        # Bulk varint-prefixed UTF-8, far cheaper than the per-value writer.
+        return write_string_column(values)
+    if ctype == "Date":
+        column = array.array("H", [(v - _EPOCH_DATE).days for v in values])
+        if not _LE:
+            column.byteswap()
+        return column.tobytes()
+    if ctype == "DateTime":
+        # Naive UTC seconds (matches the no-timezone DateTime writer). Timezone
+        # DateTime / DateTime64 keep the per-value writer path below.
+        column = array.array(
+            "I", [(v - _EPOCH_DATETIME) // _ONE_SECOND for v in values]
+        )
+        if not _LE:
+            column.byteswap()
+        return column.tobytes()
     if ctype.startswith("Nullable("):
         inner = ctype[9:-1]
         flags = bytes(1 if v is None else 0 for v in values)
@@ -477,10 +513,14 @@ def encode_column(values, ctype):
     return b"".join(writer.write(value) for value in values)
 
 
-def rows_to_native(rows, names, types):
-    """Encode ``rows`` (iterables of column values) as a single Native block."""
-    rows = [tuple(row) for row in rows]
-    wire_types = [_wire_type(t) for t in types]
+# Default rows per streamed Native block on INSERT (the client exposes this as
+# ``insert_block_size``). Smaller blocks overlap the server-side insert with the
+# next block's encoding more finely, at the cost of slightly more per-block
+# framing and a smaller atomic unit; a few thousand rows is a good middle ground.
+_INSERT_BLOCK_ROWS = 8192
+
+
+def _encode_block(rows, names, wire_types):
     parts = [_write_varint(len(names)), _write_varint(len(rows))]
     columns = list(zip(*rows)) if rows else [() for _ in names]
     for name, wire_type, column in zip(names, wire_types, columns):
@@ -488,3 +528,35 @@ def rows_to_native(rows, names, types):
         parts.append(_write_str(wire_type))
         parts.append(encode_column(list(column), wire_type))
     return b"".join(parts)
+
+
+def rows_to_native(rows, names, types):
+    """Encode ``rows`` (iterables of column values) as a single Native block."""
+    rows = [tuple(row) for row in rows]
+    wire_types = [_wire_type(t) for t in types]
+    return _encode_block(rows, names, wire_types)
+
+
+async def rows_to_native_stream(rows, names, types, block_rows=_INSERT_BLOCK_ROWS):
+    """Yield an INSERT body as a sequence of Native blocks (async, for streaming).
+
+    Streaming the body block-by-block lets ClickHouse insert one block while the
+    client is still encoding the next, overlapping client-side encoding with the
+    server-side insert (a meaningful end-to-end speedup on large inserts). The
+    generator is async so it can be handed straight to the HTTP backends as a
+    chunked request body.
+
+    Trade-off: a body split into several blocks is **not atomic** on a
+    *client-side encoding* error. If encoding raises partway through (e.g. a
+    single out-of-range or wrong-typed value somewhere in the rows), the blocks
+    already yielded have been sent and inserted, so the table is left with a
+    partial result. ``rows`` that fit in one block (``len(rows) <= block_rows``)
+    are a single block and keep the all-or-nothing behaviour.
+    """
+    rows = [tuple(row) for row in rows]
+    wire_types = [_wire_type(t) for t in types]
+    if len(rows) <= block_rows:
+        yield _encode_block(rows, names, wire_types)
+        return
+    for start in range(0, len(rows), block_rows):
+        yield _encode_block(rows[start : start + block_rows], names, wire_types)
