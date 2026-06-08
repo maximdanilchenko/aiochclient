@@ -19,7 +19,47 @@ from libc.stdint cimport (
     uint64_t,
 )
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.exceptions import ChClientError, NeedMoreData
+
+
+cdef class Cursor:
+    """Fast forward cursor over a bytes buffer (RowBinary engine)."""
+
+    cdef:
+        bytes buf
+        public Py_ssize_t pos
+        Py_ssize_t size
+
+    def __init__(self, bytes buf=b"", Py_ssize_t pos=0):
+        self.buf = buf
+        self.pos = pos
+        self.size = len(buf)
+
+    cpdef bytes read(self, Py_ssize_t n):
+        cdef Py_ssize_t end = self.pos + n
+        if end > self.size:
+            raise NeedMoreData()
+        cdef bytes chunk = self.buf[self.pos:end]
+        self.pos = end
+        return chunk
+
+    cpdef read_varint(self):
+        cdef:
+            const unsigned char* data = self.buf
+            Py_ssize_t pos = self.pos
+            unsigned long long result = 0
+            int shift = 0
+            unsigned char byte
+        while True:
+            if pos >= self.size:
+                raise NeedMoreData()
+            byte = data[pos]
+            pos += 1
+            result |= (<unsigned long long>(byte & 0x7F)) << shift
+            if not (byte & 0x80):
+                self.pos = pos
+                return result
+            shift += 7
 
 
 cdef datetime _datetime_parse(str string):

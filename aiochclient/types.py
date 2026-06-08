@@ -8,7 +8,42 @@ from typing import Any, Callable, Generator, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from aiochclient.exceptions import ChClientError
+from aiochclient.exceptions import ChClientError, NeedMoreData
+
+
+class Cursor:
+    """Synchronous forward cursor over a bytes buffer (RowBinary engine)."""
+
+    __slots__ = ("buf", "pos")
+
+    def __init__(self, buf: bytes = b"", pos: int = 0):
+        self.buf = buf
+        self.pos = pos
+
+    def read(self, n: int) -> bytes:
+        end = self.pos + n
+        if end > len(self.buf):
+            raise NeedMoreData
+        chunk = self.buf[self.pos : end]
+        self.pos = end
+        return chunk
+
+    def read_varint(self) -> int:
+        buf = self.buf
+        size = len(buf)
+        pos = self.pos
+        result = 0
+        shift = 0
+        while True:
+            if pos >= size:
+                raise NeedMoreData
+            byte = buf[pos]
+            pos += 1
+            result |= (byte & 0x7F) << shift
+            if not byte & 0x80:
+                self.pos = pos
+                return result
+            shift += 7
 
 
 _TZ_UNSET = object()

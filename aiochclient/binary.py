@@ -11,66 +11,41 @@ methods synchronous and fast).
 
 from typing import Any, AsyncGenerator, Callable, List
 
+from aiochclient.exceptions import NeedMoreData
 from aiochclient.records import Record
 
-# The RowBinary read path uses the pure-Python type objects, which carry the
-# ``read`` methods. (The Cython mirror of ``read`` lands in a later phase.)
+# The type objects carry the read/write logic (pure Python). The hot per-value
+# buffer access goes through the compiled Cursor when the Cython extension is
+# available, falling back to the pure-Python Cursor otherwise.
 from aiochclient.types import what_py_type
 
-
-class NeedMoreData(Exception):
-    """Raised by ``Cursor`` when the buffer does not hold the requested bytes."""
-
-
-class Cursor:
-    """Synchronous forward cursor over a bytes buffer."""
-
-    __slots__ = ("buf", "pos")
-
-    def __init__(self, buf: bytes = b""):
-        self.buf = buf
-        self.pos = 0
-
-    def read(self, n: int) -> bytes:
-        end = self.pos + n
-        if end > len(self.buf):
-            raise NeedMoreData
-        chunk = self.buf[self.pos : end]
-        self.pos = end
-        return chunk
-
-    def read_varint(self) -> int:
-        buf = self.buf
-        size = len(buf)
-        pos = self.pos
-        result = 0
-        shift = 0
-        while True:
-            if pos >= size:
-                raise NeedMoreData
-            byte = buf[pos]
-            pos += 1
-            result |= (byte & 0x7F) << shift
-            if not byte & 0x80:
-                self.pos = pos
-                return result
-            shift += 7
+try:
+    from aiochclient._types import Cursor
+except ImportError:
+    from aiochclient.types import Cursor
 
 
-def read_binary_str(cursor: Cursor) -> bytes:
+def read_binary_str(cursor) -> bytes:
     """Read a length-prefixed (LEB128) byte string."""
     length = cursor.read_varint()
     return cursor.read(length)
 
 
 class BinaryReader:
-    """Buffers an async stream of chunks and runs synchronous parsers over it."""
+    """Buffers an async stream of chunks and runs synchronous parsers over it.
 
-    __slots__ = ("_source", "buf", "_exhausted")
+    A committed position advances through the buffer as items are parsed (no
+    per-item slicing — that would be quadratic on a large result). The consumed
+    prefix is dropped only when more data has to be fetched, which keeps memory
+    bounded for streaming without copying on the hot path.
+    """
+
+    __slots__ = ("_source", "_buf", "_pos", "_exhausted")
 
     def __init__(self, source: AsyncGenerator[bytes, None]):
         self._source = source.__aiter__()
-        self.buf = b""
+        self._buf = b""
+        self._pos = 0
         self._exhausted = False
 
     async def _more(self) -> bool:
@@ -81,26 +56,30 @@ class BinaryReader:
         except StopAsyncIteration:
             self._exhausted = True
             return False
-        self.buf += chunk
+        # Drop the already-consumed prefix before growing the buffer.
+        if self._pos:
+            self._buf = self._buf[self._pos :]
+            self._pos = 0
+        self._buf += chunk
         return True
 
     async def parse(self, fn: Callable[[Cursor], Any]) -> Any:
         """Run ``fn(cursor)``, refilling the buffer on ``NeedMoreData``."""
         while True:
-            cursor = Cursor(self.buf)
+            cursor = Cursor(self._buf, self._pos)
             try:
                 result = fn(cursor)
             except NeedMoreData:
                 if not await self._more():
                     raise
                 continue
-            self.buf = self.buf[cursor.pos :]
+            self._pos = cursor.pos
             return result
 
 
 async def _read_header(reader: BinaryReader):
     """Read a RowBinaryWithNamesAndTypes header -> (names, type strings)."""
-    num_columns = await reader.parse(Cursor.read_varint)
+    num_columns = await reader.parse(lambda cursor: cursor.read_varint())
     names = [(await reader.parse(read_binary_str)).decode() for _ in range(num_columns)]
     types = [(await reader.parse(read_binary_str)).decode() for _ in range(num_columns)]
     return names, types

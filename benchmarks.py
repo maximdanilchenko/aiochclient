@@ -43,11 +43,19 @@ import datetime as dt
 import time
 import uuid
 
-import uvloop
-from aioch import Client
 from aiohttp import ClientSession
 
 from aiochclient import ChClient
+
+try:
+    import uvloop
+except ImportError:
+    uvloop = None
+
+try:
+    from aioch import Client
+except ImportError:
+    Client = None
 
 
 def row_data():
@@ -179,16 +187,51 @@ async def bench_selects_aioch_with_decoding(*, retries: int, rows: int):
     print(f"  Speed: {speed} rows/sec")
 
 
+async def bench_formats(*, retries: int, rows: int):
+    """Compare the TSV and RowBinary engines for select-decode and insert."""
+    print("TSV vs RowBinary")
+    one_row = row_data()
+    async with ClientSession() as session:
+        prep = ChClient(session)
+        for label, binary in (("TSV      ", False), ("RowBinary", True)):
+            client = ChClient(session, binary=binary)
+            # SELECT (with full decoding) over a fixed `rows`-row table
+            await prepare_db(prep)
+            await insert_rows(prep, one_row, rows)
+            await client.fetch("SELECT * FROM benchmark_tbl")  # warmup
+            start = time.time()
+            for _ in range(retries):
+                selected = await client.fetch("SELECT * FROM benchmark_tbl")
+                _ = [row[:] for row in selected]
+            sel_speed = int(rows / ((time.time() - start) / retries))
+            # INSERT — clear before each run (not timed) to avoid accumulation
+            insert_total = 0.0
+            for _ in range(retries):
+                await prepare_db(prep)
+                start = time.time()
+                await client.execute(
+                    "INSERT INTO benchmark_tbl VALUES",
+                    *(one_row for _ in range(rows)),
+                )
+                insert_total += time.time() - start
+            ins_speed = int(rows / (insert_total / retries))
+            print(
+                f"  {label}  select-decode: {sel_speed:>8} rows/sec"
+                f" | insert: {ins_speed:>8} rows/sec"
+            )
+
+
 async def main():
     await bench_selects(retries=100, rows=10000)
     await bench_selects_with_decoding(retries=100, rows=10000)
     await bench_inserts(retries=100, rows=10000)
+    await bench_formats(retries=50, rows=10000)
 
-    await bench_selects_aioch_with_decoding(retries=100, rows=10000)
+    if Client is not None:
+        await bench_selects_aioch_with_decoding(retries=100, rows=10000)
 
 
 if __name__ == "__main__":
-    uvloop.install()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
-    loop.close()
+    if uvloop is not None:
+        uvloop.install()
+    asyncio.run(main())
