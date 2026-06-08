@@ -20,47 +20,52 @@ real-world-ish workload. Reproduce with `benchmarks_vs_libs.py`.
 
 ## Environment
 
-- **Machine**: Apple M1 Pro, macOS (Darwin 23.6), CPython 3.11.
-- **ClickHouse**: 26.5 in Docker, local. HTTP on `:8123`, native TCP on `:9000`.
-- **Client versions**: aiochclient 2.7.0 + the RowBinary and Native engines
-  (with the Cython extension built and `ciso8601` 2.3.3); clickhouse-connect
-  1.1.1; clickhouse-driver 0.2.10; asynch 0.3.1; aiohttp 3.14.0.
+The headline figures below are from the **GitHub-hosted CI runner** (the
+`Benchmarks` workflow) — an isolated, modest shared VM (~4 vCPU, Linux). It is
+reproducible and representative of commodity hardware; a developer machine is
+several times faster across the board (and, importantly, the SELECT gap to
+clickhouse-connect narrows there — see below). ClickHouse runs in Docker on the
+runner with HTTP `:8123` and native `:9000`. Clients: aiochclient 2.8.0 with the
+Cython extension + `ciso8601`; clickhouse-connect, clickhouse-driver, asynch
+(latest at run time).
 
 ## Results (rows/sec, higher is better)
 
 | Client | Protocol | Async | SELECT (decode) | INSERT |
 |:-------|:---------|:-----:|----------------:|-------:|
-| **aiochclient — Native** | HTTP | ✅ | **~1,000k** | **~450k** |
-| **aiochclient — RowBinary** | HTTP | ✅ | ~370k | ~320k |
-| **aiochclient — TSV** | HTTP | ✅ | ~305k | ~245k |
-| clickhouse-connect | HTTP | ✅ | ~820k | ~400k |
-| asynch | native | ✅ | ~108k | ~165k |
-| clickhouse-driver | native | ❌ (sync) | ~440k | ~370k |
+| clickhouse-connect | HTTP | ✅ | **~750k** | ~415k |
+| **aiochclient — Native** | HTTP | ✅ | ~565k | **~415k** |
+| clickhouse-driver | native | ❌ (sync) | ~330k | ~290k |
+| **aiochclient — RowBinary** | HTTP | ✅ | ~170k | ~170k |
+| **aiochclient — TSV** | HTTP | ✅ | ~150k | ~165k |
+| asynch | native | ✅ | ~62k | ~95k |
 
-Numbers are indicative (best-of-8 on an otherwise-idle machine; they vary
-±10–20% run to run, INSERT more so) and depend on the data, the ClickHouse
-version and the machine. They are also sensitive to background CPU load — on a
-busy machine the absolute figures fall (the columnar decode is single-threaded),
-though the ordering holds.
+Numbers are indicative (best-of-8; they vary run to run, INSERT more so) and
+depend on the data, the ClickHouse version and the machine. They are sensitive to
+CPU speed: the columnar decode is single-threaded, and aiochclient builds Python
+result objects per row, so it scales with CPU more than clickhouse-connect's
+C+numpy decode does. On a fast/idle dev machine all the absolute figures are
+several times higher and aiochclient-Native draws level with (or ahead of)
+clickhouse-connect on SELECT; on this modest runner connect leads SELECT.
 
 ## Takeaways
 
-- **aiochclient's Native engine is the fastest SELECT here** (~1M rows/sec),
-  ahead of clickhouse-connect, while keeping aiochclient's small,
-  dependency-light footprint (**no numpy**). It decodes ClickHouse's columnar
-  `Native` format whole-column-at-once — fixed-width numerics straight through
-  the stdlib `array` module, strings/dates in the compiled Cursor, then one
-  transpose to rows — and, crucially, suppresses the cyclic garbage collector
-  while it allocates the result objects (see below).
-- **clickhouse-connect** is the official client and decodes the columnar binary
-  format in C on top of numpy; it is the next fastest on SELECT and the fastest
-  on INSERT.
+- **INSERT — aiochclient-Native is on par with clickhouse-connect and ahead of
+  the rest.** It encodes columns in bulk and streams the body as Native blocks,
+  so the server inserts one block while the client encodes the next.
+- **SELECT — clickhouse-connect is fastest here.** It is the official client and
+  decodes the columnar format in C on top of numpy, which is largely
+  CPU-independent. aiochclient-Native is the next fastest and **by far the
+  fastest of aiochclient's own engines** (3–4× its RowBinary/TSV), staying
+  dependency-light (**no numpy**); the gap to connect is aiochclient's per-row
+  Python objects (`Record`s, tuples, the `int`s from `array.tolist()`) and it
+  narrows on faster CPUs.
 - **clickhouse-driver** (native protocol, C extensions) is fast but
   **synchronous** — not usable as-is in an asyncio app without a thread pool.
-- **RowBinary** remains the best *row-oriented* engine (and the one used when
-  streaming row-by-row via `iterate`); **TSV** is the zero-Cython baseline.
-- **asynch** is the slowest on SELECT here despite the native protocol — its
-  async row materialization appears to be the bottleneck.
+- **RowBinary** is the best *row-oriented* engine (and the one used when streaming
+  row-by-row via `iterate`); **TSV** is the zero-Cython baseline.
+- **asynch** is the slowest here despite the native protocol — its async row
+  materialization appears to be the bottleneck.
 
 ### Notes
 

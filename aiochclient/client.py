@@ -66,6 +66,26 @@ class ChClient:
         Pass True if you want Clickhouse to compress its responses with gzip.
         They will be decompressed automatically. But overall it will be slightly slower.
 
+    :param bool binary:
+        Use the binary ``RowBinary`` engine for results and inserts instead of the
+        default text (TSV) format. Faster, and the best choice for streaming
+        row-by-row via ``iterate``.
+
+    :param bool native:
+        Use the columnar ``Native`` engine — the fastest of the engines for bulk
+        SELECT and INSERT, decoding whole columns at once (no numpy). Takes
+        precedence over ``binary`` if both are set. Caveats: ``decode=False``
+        (raw bytes) is not supported, and the Native format carries no per-column
+        timezone, so a tz-aware ``DateTime``/``DateTime64`` is returned as a naive
+        UTC ``datetime``.
+
+    :param int insert_block_size:
+        Rows per streamed block for a ``native=True`` INSERT (default 8192). The
+        body is streamed as Native blocks so the server inserts one while the
+        client encodes the next; a multi-block insert is therefore not atomic on
+        a client-side encoding error (blocks already sent are committed). Set to 0
+        to send a single atomic block (no streaming overlap).
+
     :param \\*\\*settings:
         Any settings from https://clickhouse.com/docs/en/operations/settings/settings
     """

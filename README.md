@@ -154,12 +154,12 @@ By default results are encoded/decoded through ClickHouse's text (TSV) format.
 Two faster binary engines are available, each opt-in via a single flag; both use
 the Cython extension when it's built and fall back to pure Python otherwise.
 
-**`native=True`** — ClickHouse's column-oriented `Native` format, the fastest
-engine for SELECT. Whole columns are decoded at once (fixed-width numerics
-straight through the stdlib `array` module, strings/dates in the compiled
-Cursor), which rivals the C-extension clients while keeping aiochclient
-dependency-light — **no numpy**. INSERTs are encoded column-by-column and
-streamed as Native blocks, so the server inserts one block while the client
+**`native=True`** — ClickHouse's column-oriented `Native` format, by far the
+fastest of aiochclient's engines. Whole columns are decoded at once (fixed-width
+numerics straight through the stdlib `array` module, strings/dates in the
+compiled Cursor), which gets close to the C-extension clients while keeping
+aiochclient dependency-light — **no numpy**. INSERTs are encoded column-by-column
+and streamed as Native blocks, so the server inserts one block while the client
 encodes the next.
 
 ```python
@@ -198,28 +198,31 @@ client = ChClient(session, native=True, insert_block_size=0)  # atomic inserts
 #### Speed
 
 Engine comparison on mixed-type rows, fully decoded, with the Cython extension
-built:
+built — `Native` is 3–4× faster than the row-oriented engines:
 
-| Engine      | SELECT (decode)  | INSERT          |
-|:------------|-----------------:|----------------:|
-| `TSV`       | ~305k rows/sec   | ~245k rows/sec  |
-| `RowBinary` | ~370k rows/sec   | ~320k rows/sec  |
-| `Native`    | ~1,000k rows/sec | ~450k rows/sec  |
+| Engine      | SELECT (decode) | INSERT         |
+|:------------|----------------:|---------------:|
+| `TSV`       | ~150k rows/sec  | ~165k rows/sec |
+| `RowBinary` | ~170k rows/sec  | ~170k rows/sec |
+| `Native`    | ~565k rows/sec  | ~415k rows/sec |
 
-Against the popular Python ClickHouse clients on the same workload, the Native
-engine is the fastest on both SELECT and INSERT, ahead of clickhouse-connect and
-of the synchronous clickhouse-driver:
+Against the popular Python ClickHouse clients on the same workload: on **INSERT**
+the Native engine matches clickhouse-connect and leads the rest; on **SELECT** it
+is competitive but **clickhouse-connect is typically faster** — its C+numpy
+columnar decode is less CPU-bound than aiochclient's per-row Python objects (the
+gap narrows on a fast machine and widens on a slow one).
 
-| Client                              | SELECT           | INSERT         |
-|:------------------------------------|-----------------:|---------------:|
-| aiochclient — Native (HTTP, async)  | ~1,000k rows/sec | ~450k rows/sec |
-| clickhouse-connect (HTTP, async)    | ~820k rows/sec   | ~400k rows/sec |
-| clickhouse-driver (native, sync)    | ~440k rows/sec   | ~370k rows/sec |
-| asynch (native, async)              | ~108k rows/sec   | ~165k rows/sec |
+| Client                              | SELECT          | INSERT         |
+|:------------------------------------|----------------:|---------------:|
+| clickhouse-connect (HTTP, async)    | ~750k rows/sec  | ~415k rows/sec |
+| aiochclient — Native (HTTP, async)  | ~565k rows/sec  | ~415k rows/sec |
+| clickhouse-driver (native, sync)    | ~330k rows/sec  | ~290k rows/sec |
+| asynch (native, async)              | ~62k rows/sec   | ~95k rows/sec  |
 
-Indicative best-of-8 figures on an otherwise-idle Apple M1 Pro (ClickHouse 26.5,
-single connection); they vary run to run, with the data, and with background CPU
-load. Full methodology lives in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md);
+Indicative best-of-8 figures from the GitHub-hosted CI runner (a modest shared
+VM; a dev machine is several times faster across the board, which also narrows
+the SELECT gap). They vary run to run, with the data, and with CPU load. Full
+methodology lives in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md);
 reproduce with `benchmarks_vs_libs.py` (clients) and `benchmarks.py` (engines).
 
 ## Documentation
