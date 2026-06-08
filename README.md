@@ -284,11 +284,17 @@ to determine pool size. By default, the pool limit is 100 open connections.
 
 ## Notes on Speed
 
-It's highly recommended using `uvloop` and installing `aiochclient` with
-speedups for the sake of speed. Some recent benchmarks on our
-machines without parallelization:
+For the best throughput:
 
-- 180k-220k rows/sec on SELECT
-- 50k-80k rows/sec on INSERT
+- Pick a binary engine. **`native=True`** is the fastest for bulk SELECT/INSERT
+  and **`binary=True`** (RowBinary) is best for row-by-row streaming via
+  `iterate` — both are several times faster than the default TSV format. See
+  [Binary engines: RowBinary and Native](#binary-engines-rowbinary-and-native)
+  for the numbers and trade-offs.
+- Build the Cython extension (used automatically when present; the binary engines
+  rely on it) and install the `*-speedups` extra — `ciso8601` for fast datetime
+  parsing, plus `aiodns` + `faust-cchardet` for `aiohttp`.
+- Use [`uvloop`](https://github.com/MagicStack/uvloop).
 
-_Note: these benchmarks are system dependent_
+Throughput is system-dependent (CPU speed and load especially); full per-engine
+and cross-client figures are in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md).
