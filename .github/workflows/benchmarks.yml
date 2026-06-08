@@ -1,0 +1,54 @@
+name: Benchmarks
+
+# Manual-only: run from the Actions tab ("Run workflow"). GitHub-hosted runners
+# are modest shared VMs, so the absolute numbers are lower than a dev laptop —
+# but they are isolated and consistent, which makes them useful for tracking
+# relative changes / regressions between commits.
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r dev-requirements/dev-requirements-cython-ciso.txt
+          # the comparison clients are only needed for the benchmark
+          pip install clickhouse-connect clickhouse-driver asynch
+      - name: Build Cython extension
+        run: python setup.py build_ext --inplace
+      - name: Start ClickHouse (HTTP 8123 + native 9000)
+        run: |
+          docker run -p 8123:8123 -p 9000:9000 -d --name cs \
+            -e CLICKHOUSE_SKIP_USER_SETUP=1 clickhouse/clickhouse-server
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:8123/ping | grep -q Ok && echo "ClickHouse is ready" && exit 0
+            sleep 1
+          done
+          echo "ClickHouse did not become ready" && exit 1
+      - name: Client comparison (benchmarks_vs_libs.py)
+        run: python benchmarks_vs_libs.py | tee bench_libs.txt
+      - name: Engine comparison (benchmarks.py)
+        run: python benchmarks.py | tee bench_formats.txt || true
+      - name: Publish results to the job summary
+        if: always()
+        run: |
+          {
+            echo '## Benchmark results'
+            echo '_GitHub-hosted runner (~4 vCPU); absolute numbers are lower than a dev machine but consistent._'
+            echo
+            echo '### Clients (`benchmarks_vs_libs.py`)'
+            echo '```'
+            cat bench_libs.txt 2>/dev/null || echo '(no output)'
+            echo '```'
+            echo '### Engines (`benchmarks.py`)'
+            echo '```'
+            cat bench_formats.txt 2>/dev/null || echo '(no output)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
