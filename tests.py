@@ -261,6 +261,25 @@ def class_chclient(chclient, all_types_db, rows, request):
     request.cls.rows = [tuple(r) for r in cls_rows]
 
 
+@pytest.fixture(params=["tsv", "binary", "native"])
+def class_engine(request, chclient):
+    """Run the decoded type checks against each read engine.
+
+    ``self.engine_ch`` is the client whose decoded output is under test; it
+    shares ``chclient``'s session. The ``tsv`` case reuses ``chclient`` itself.
+    The raw-bytes (``decode=False``) assertions always stay on the TSV client,
+    since that path is TSV-only.
+    """
+    engine = request.param
+    request.cls.engine = engine
+    if engine == "binary":
+        request.cls.engine_ch = ChClient(chclient._http_client._session, binary=True)
+    elif engine == "native":
+        request.cls.engine_ch = ChClient(chclient._http_client._session, native=True)
+    else:
+        request.cls.engine_ch = chclient
+
+
 @pytest.mark.client
 @pytest.mark.usefixtures("class_chclient")
 class TestClient:
@@ -277,13 +296,48 @@ class TestClient:
 
 
 @pytest.mark.types
-@pytest.mark.usefixtures("class_chclient")
+@pytest.mark.usefixtures("class_chclient", "class_engine")
 class TestTypes:
+    # Columns the Native engine cannot decode yet: LowCardinality uses a
+    # dictionary-encoded layout and Nested a columnar one (both phase 3), and
+    # the Native format ships DateTime64 without its timezone (returned as naive
+    # UTC, so it cannot match the tz-aware TSV/RowBinary value).
+    NATIVE_UNSUPPORTED = {
+        "low_cardinality_str",
+        "low_cardinality_nullable_str",
+        "low_cardinality_int",
+        "low_cardinality_date",
+        "low_cardinality_datetime",
+        "array_low_cardinality_string",
+        "nested_int",
+        "nested_str_date",
+        "datetime64",
+    }
+
+    # The binary engines decode Float32 from its exact 4-byte IEEE-754 value,
+    # whereas TSV ships ClickHouse's shorter text rounding (e.g. 23.432 vs
+    # 23.43199920654297). The expected values here are the TSV roundings, so
+    # this column is only comparable on the TSV engine.
+    NON_TSV_REPR = {"float32"}
+
+    def _skip_unsupported(self, field):
+        name = field.strip()
+        if self.engine != "tsv" and name in self.NON_TSV_REPR:
+            pytest.skip(f"'{name}' text rounding is TSV-specific")
+        if self.engine == "native" and name in self.NATIVE_UNSUPPORTED:
+            pytest.skip(f"Native engine does not decode '{name}' yet")
+
     async def select_field(self, field):
-        return await self.ch.fetchval(f"SELECT {field} FROM all_types WHERE uint8=1")
+        self._skip_unsupported(field)
+        return await self.engine_ch.fetchval(
+            f"SELECT {field} FROM all_types WHERE uint8=1"
+        )
 
     async def select_record(self, field):
-        return await self.ch.fetchrow(f"SELECT {field} FROM all_types WHERE uint8=1")
+        self._skip_unsupported(field)
+        return await self.engine_ch.fetchrow(
+            f"SELECT {field} FROM all_types WHERE uint8=1"
+        )
 
     async def select_field_bytes(self, field):
         return await self.ch.fetchval(
