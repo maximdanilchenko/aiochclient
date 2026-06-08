@@ -261,6 +261,22 @@ cpdef tuple read_row(Cursor cursor, tuple readers):
     return tuple(out)
 
 
+cpdef list read_column(Cursor cursor, _RBType reader, Py_ssize_t n):
+    """Read ``n`` contiguous values of one scalar type (Native column fallback).
+
+    In the Native format a scalar column is just its RowBinary per-value
+    encodings laid out back to back, so the compiled per-type reader can be
+    looped at the C level to decode any fixed-layout scalar (Decimal, UUID,
+    DateTime64, Enum, IPv4/6, Int128/256, ...) without a bespoke bulk path.
+    """
+    cdef:
+        list out = []
+        Py_ssize_t i
+    for i in range(n):
+        out.append(reader.read(cursor))
+    return out
+
+
 cdef datetime _datetime_parse(str string):
     return datetime.strptime(string, '%Y-%m-%d %H:%M:%S')
 

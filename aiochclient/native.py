@@ -12,7 +12,12 @@ import array
 import sys
 from typing import AsyncGenerator
 
-from aiochclient.binary import BinaryReader, read_binary_str
+from aiochclient.binary import (
+    BinaryReader,
+    read_binary_str,
+    read_column,
+    what_py_type,
+)
 from aiochclient.exceptions import ChClientError, NeedMoreData
 from aiochclient.records import Record, record_from_decoded
 
@@ -39,6 +44,59 @@ _NUMERIC = {
 }
 for _t, (_c, _w) in _NUMERIC.items():
     assert array.array(_c).itemsize == _w, _t  # platform sanity check
+
+
+def _split_args(spec):
+    """Split a comma-separated type-argument list at the top level.
+
+    Commas inside nested parentheses or single-quoted literals (e.g. an
+    ``Enum8('a'=1,'b'=2)`` element) are not split points.
+    """
+    parts = []
+    depth = 0
+    in_quote = False
+    start = 0
+    i = 0
+    length = len(spec)
+    while i < length:
+        ch = spec[i]
+        if in_quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == "'":
+                in_quote = False
+        elif ch == "'":
+            in_quote = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(spec[start:i].strip())
+            start = i + 1
+        i += 1
+    parts.append(spec[start:].strip())
+    return parts
+
+
+def _element_type(spec):
+    """Strip an optional leading ``name `` from a (possibly named) Tuple element."""
+    depth = 0
+    in_quote = False
+    for i, ch in enumerate(spec):
+        if in_quote:
+            if ch == "'":
+                in_quote = False
+        elif ch == "'":
+            in_quote = True
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == " " and depth == 0:
+            return spec[i + 1 :].strip()
+    return spec
 
 
 def decode_column(cursor, n, ctype):
@@ -82,7 +140,35 @@ def decode_column(cursor, n, ctype):
             out.append(flat[prev:offset])
             prev = offset
         return out
-    raise ChClientError(f"Native decoding is not implemented for type '{ctype}'")
+    if ctype.startswith("Tuple("):
+        # Native stores a Tuple column as one sub-column per element.
+        specs = _split_args(ctype[6:-1])
+        subcolumns = [decode_column(cursor, n, _element_type(s)) for s in specs]
+        if not subcolumns:
+            return [() for _ in range(n)]
+        return list(zip(*subcolumns))
+    if ctype.startswith("Map("):
+        # Like Array(Tuple(K, V)): offsets, then a key and a value sub-column.
+        ktype, vtype = _split_args(ctype[4:-1])
+        offsets = decode_column(cursor, n, "UInt64")
+        total = offsets[-1] if n else 0
+        keys = decode_column(cursor, total, ktype)
+        values = decode_column(cursor, total, vtype)
+        out = []
+        prev = 0
+        for offset in offsets:
+            out.append(dict(zip(keys[prev:offset], values[prev:offset])))
+            prev = offset
+        return out
+    if ctype.startswith("LowCardinality(") or ctype.startswith("Nested("):
+        raise ChClientError(
+            f"Native decoding is not yet implemented for type '{ctype}' "
+            f"(use binary=True or the default TSV engine)"
+        )
+    # Generic per-value fallback through the compiled RowBinary readers — covers
+    # Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256 and any other
+    # fixed-layout scalar whose Native column is its RowBinary values back to back.
+    return read_column(cursor, what_py_type(ctype), n)
 
 
 def _read_varint(cursor):

@@ -124,6 +124,7 @@ def _parse_tz(name: str) -> Optional[str]:
         return name[name.index("'") + 1 : name.rindex("'")].replace("\\", "")
     return None
 
+
 # RowBinary integer specs: name -> (byte width, signed). All little-endian.
 RB_INT_SPECS = {
     "UInt8": (1, False),
@@ -156,6 +157,7 @@ def write_varint(value: int) -> bytes:
         else:
             out.append(byte)
             return bytes(out)
+
 
 try:
     import ciso8601
@@ -713,10 +715,7 @@ class ArrayType(BaseType):
         self.type = what_py_type(RE_ARRAY.findall(name)[0], container=True)
 
     def p_type(self, string: str) -> list:
-        return [
-            self.type.p_type(val)
-            for val in self.seq_parser(string[1:-1])
-        ]
+        return [self.type.p_type(val) for val in self.seq_parser(string[1:-1])]
 
     def convert(self, value: bytes) -> list:
         return self.p_type(value.decode())
@@ -846,9 +845,7 @@ class EnumType(StrType):
         self._size = 1 if name.startswith("Enum8") else 2
         self._mapping = {
             int(num): label
-            for label, num in re.findall(
-                r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name
-            )
+            for label, num in re.findall(r"'((?:[^'\\]|\\.)*)'\s*=\s*(-?\d+)", name)
         }
         self._reverse = {label: index for index, label in self._mapping.items()}
 
@@ -972,6 +969,15 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
 def what_py_converter(name: str, container: bool = False) -> Callable:
     """Returns needed type class from clickhouse type name"""
     return what_py_type(name, container).convert
+
+
+def read_column(cursor, reader, n: int) -> list:
+    """Read n contiguous values of one scalar type (Native column fallback).
+
+    Pure-Python mirror of the compiled ``read_column``: a Native scalar column
+    is its RowBinary per-value encodings laid out back to back.
+    """
+    return [reader.read(cursor) for _ in range(n)]
 
 
 def py2ch(value):

@@ -173,8 +173,7 @@ async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS test_cache")
     await chclient.execute("DROP TABLE IF EXISTS test_cache_mv")
     await chclient.execute("DROP TABLE IF EXISTS test_insert_file")
-    await chclient.execute(
-        """
+    await chclient.execute("""
     CREATE TABLE all_types (uint8 UInt8,
                             uint16 UInt16,
                             uint32 UInt32,
@@ -228,34 +227,27 @@ async def all_types_db(chclient, rows):
                             nested_int Nested(value1 Integer, value2 Integer),
                             nested_str_date Nested(value1 String, value2 Date)
                             ) ENGINE = Memory
-    """
-    )
-    await chclient.execute(
-        """
+    """)
+    await chclient.execute("""
         CREATE TABLE test_cache (
           key           String,
           int32Cache    AggregateFunction(avg, Int32),
           float32Cache  SimpleAggregateFunction(sum, Float64))
         ENGINE = AggregatingMergeTree()
         ORDER BY key
-        """
-    )
-    await chclient.execute(
-        """
+        """)
+    await chclient.execute("""
         CREATE MATERIALIZED VIEW test_cache_mv TO test_cache AS
           SELECT avgState(int32) AS int32Cache, sum(float32) AS float32Cache
           FROM all_types
-        """
-    )
-    await chclient.execute(
-        """
+        """)
+    await chclient.execute("""
         CREATE TABLE test_insert_file(
             uint32  UInt32,
             string  String,
             date    Date
         ) ENGINE = Memory
-        """
-    )
+        """)
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
 
@@ -681,7 +673,7 @@ class TestTypes:
         record = await self.select_record_bytes("array_string")
         assert record[0] == result
         assert record["array_string"] == result
-    
+
     async def test_array_tuple(self):
         result = [("hello'", 3, "hello")]
         assert await self.select_field("array_tuple") == result
@@ -1428,7 +1420,11 @@ class TestRowBinaryDecode:
             UUID("1ea47c97-16a8-4338-877e-66f464374944"),
         ),
         ("IPv4", "8528fd74", IPv4Address("116.253.40.133")),
-        ("IPv6", "200144c8012926320033000002520002", IPv6Address("2001:44c8:129:2632:33:0:252:2")),
+        (
+            "IPv6",
+            "200144c8012926320033000002520002",
+            IPv6Address("2001:44c8:129:2632:33:0:252:2"),
+        ),
         ("Enum8('a' = 1, 'b' = 2)", "02", "b"),
         ("Nullable(UInt8)", "01", None),
         ("Nullable(UInt8)", "0005", 5),
@@ -1505,7 +1501,11 @@ class TestRowBinary:
         # widened to float64, so floats are compared with a tolerance.
         if isinstance(tsv_value, float):
             return bin_value == pytest.approx(tsv_value, rel=1e-6, abs=1e-6)
-        if isinstance(tsv_value, list) and tsv_value and isinstance(tsv_value[0], float):
+        if (
+            isinstance(tsv_value, list)
+            and tsv_value
+            and isinstance(tsv_value[0], float)
+        ):
             return all(
                 b == pytest.approx(t, rel=1e-6, abs=1e-6)
                 for t, b in zip(tsv_value, bin_value)
@@ -1536,8 +1536,7 @@ class TestRowBinary:
     async def test_insert_round_trip(self):
         binary = self._binary_client()
         await binary.execute("DROP TABLE IF EXISTS rb_insert")
-        await binary.execute(
-            """
+        await binary.execute("""
             CREATE TABLE rb_insert (
                 u8 UInt8, i64 Int64, f Float64, s String, fs FixedString(4),
                 d Date, dttm DateTime('UTC'),
@@ -1546,8 +1545,7 @@ class TestRowBinary:
                 e Enum8('a' = 1, 'b' = 2), arr Array(UInt8),
                 m Map(String, UInt8), nn Nullable(UInt8), tup Tuple(UInt8, String)
             ) ENGINE = Memory
-            """
-        )
+            """)
         row = (
             7,
             -5,
@@ -1592,8 +1590,10 @@ class TestRowBinary:
 @pytest.mark.usefixtures("class_chclient")
 class TestNative:
     # https://github.com/maximdanilchenko/aiochclient/issues/134
-    # The columnar Native read engine (Phase 1: numerics, String, FixedString,
-    # Date, DateTime (UTC), Bool, Nullable, Array).
+    # The columnar Native read engine. Phase 1: numerics, String, FixedString,
+    # Date, DateTime (UTC), Bool, Nullable, Array. Phase 2 adds the scalar
+    # long-tail (Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256, ...) plus
+    # columnar Tuple and Map.
     NATIVE_DDL = """
         CREATE TABLE native_t (
             id UInt32, big Int64, neg Int16, score Float64, f32 Float32,
@@ -1645,10 +1645,54 @@ class TestNative:
         rows = [r[0] async for r in native.iterate("SELECT number FROM numbers(3)")]
         assert rows == [0, 1, 2]
 
+    EXTENDED_DDL = """
+        CREATE TABLE native_ext (
+            id UInt32, dec Decimal(18, 4), ts64 DateTime64(3),
+            en Enum8('a' = 1, 'b' = 2), uid UUID, ip4 IPv4, ip6 IPv6,
+            big Int128, tup Tuple(UInt8, String), ntup Tuple(x UInt8, y String),
+            mp Map(String, UInt32), arr_tup Array(Tuple(UInt8, String)),
+            nl Nullable(Decimal(10, 2))
+        ) ENGINE = Memory
+        """
+
+    async def test_extended_types_match_tsv(self):
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_ext")
+        await native.execute(self.EXTENDED_DDL)
+        rows = [
+            (
+                i,
+                Decimal("3.1416"),
+                dt.datetime(2021, 6, 1, 12, 30, 0, 123000),
+                "b",
+                UUID("12345678-1234-5678-1234-567812345678"),
+                IPv4Address("1.2.3.4"),
+                IPv6Address("::1"),
+                170141183460469231731687303715884105727,
+                (7, "hi"),
+                (9, "yo"),
+                {"k1": 10, "k2": 20},
+                [(1, "a"), (2, "b")],
+                (Decimal("5.50") if i % 2 else None),
+            )
+            for i in range(4)
+        ]
+        await native.execute("INSERT INTO native_ext VALUES", *rows)
+        tsv_rows = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_ext ORDER BY id")
+        ]
+        nat_rows = [
+            r[:] for r in await native.fetch("SELECT * FROM native_ext ORDER BY id")
+        ]
+        assert tsv_rows == nat_rows
+        await native.execute("DROP TABLE IF EXISTS native_ext")
+
     async def test_unsupported_type_raises(self):
         native = self._native_client()
+        # LowCardinality uses a dictionary-encoded columnar layout that the
+        # Native engine does not decode yet (Phase 3).
         with pytest.raises(ChClientError):
-            await native.fetchval("SELECT 'b'::Enum8('a' = 1, 'b' = 2)")
+            await native.fetchval("SELECT toLowCardinality('x')")
 
 
 class TestErrorBody:

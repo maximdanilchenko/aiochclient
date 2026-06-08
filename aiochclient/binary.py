@@ -18,9 +18,14 @@ from aiochclient.records import Record, record_from_decoded
 # whole-row reader that avoids per-value Python dispatch) when the Cython
 # extension is built, falling back to the pure-Python implementations.
 try:
-    from aiochclient._types import Cursor, read_row as _read_row_native, what_py_type
+    from aiochclient._types import (
+        Cursor,
+        read_column,
+        read_row as _read_row_native,
+        what_py_type,
+    )
 except ImportError:
-    from aiochclient.types import Cursor, what_py_type
+    from aiochclient.types import Cursor, read_column, what_py_type
 
     _read_row_native = None
 
