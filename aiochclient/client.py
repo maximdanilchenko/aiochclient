@@ -6,6 +6,7 @@ from types import TracebackType
 from typing import Any, AsyncGenerator, BinaryIO, Dict, List, Optional, Type
 
 from aiochclient.binary import fetch_column_types, rows_from_binary, rows_to_binary
+from aiochclient.native import rows_from_native
 from aiochclient.exceptions import ChClientError
 from aiochclient.http_clients.abc import HttpClientABC
 from aiochclient.records import FromJsonFabric, Record, RecordsFabric
@@ -67,6 +68,7 @@ class ChClient:
         "_json",
         "_http_client",
         "_binary",
+        "_native",
     )
 
     def __init__(
@@ -79,6 +81,7 @@ class ChClient:
         compress_response: bool = False,
         json=json_,  # type: ignore
         binary: bool = False,
+        native: bool = False,
         **settings,
     ):
         _http_client = HttpClientABC.choose_http_client(session)
@@ -95,8 +98,9 @@ class ChClient:
         if compress_response:
             self.params["enable_http_compression"] = 1
         self._json = json
-        # Decode SELECT results with the RowBinary engine instead of TSV.
+        # Decode SELECT results with the RowBinary / Native engine instead of TSV.
         self._binary = binary
+        self._native = native
         self.params.update(settings)
 
     async def __aenter__(self) -> 'ChClient':
@@ -165,7 +169,9 @@ class ChClient:
             is_json = True
 
         if not is_json and need_fetch:
-            if self._binary:
+            if self._native:
+                query += " FORMAT Native"
+            elif self._binary:
                 query += " FORMAT RowBinaryWithNamesAndTypes"
             else:
                 query += " FORMAT TSVWithNamesAndTypes"
@@ -195,11 +201,12 @@ class ChClient:
             params["query_id"] = query_id
 
         if need_fetch:
-            if self._binary and not is_json:
+            if (self._native or self._binary) and not is_json:
                 source = self._http_client.post_return_bytes(
                     url=self.url, params=params, headers=self.headers, data=data
                 )
-                async for record in rows_from_binary(source):
+                driver = rows_from_native if self._native else rows_from_binary
+                async for record in driver(source):
                     yield record
                 return
             response = self._http_client.post_return_lines(

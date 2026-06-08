@@ -9,7 +9,14 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
-from cpython.datetime cimport date, datetime
+from cpython.datetime cimport (
+    date,
+    date_new,
+    datetime,
+    datetime_new,
+    import_datetime,
+)
+from cpython.unicode cimport PyUnicode_DecodeUTF8
 from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from libc.stdint cimport (
     int8_t,
@@ -24,6 +31,26 @@ from libc.stdint cimport (
 from libc.string cimport memcpy
 
 from aiochclient.exceptions import ChClientError, NeedMoreData
+
+import_datetime()
+
+
+cdef inline void _civil_from_days(long long z, int* y, int* m, int* d):
+    # Howard Hinnant's algorithm: days since 1970-01-01 -> (year, month, day).
+    z += 719468
+    cdef long long era = (z if z >= 0 else z - 146096) // 146097
+    cdef long long doe = z - era * 146097
+    cdef long long yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+    cdef long long year = yoe + era * 400
+    cdef long long doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    cdef long long mp = (5 * doy + 2) // 153
+    cdef long long day = doy - (153 * mp + 2) // 5 + 1
+    cdef long long month = mp + 3 if mp < 10 else mp - 9
+    if month <= 2:
+        year += 1
+    y[0] = <int>year
+    m[0] = <int>month
+    d[0] = <int>day
 
 
 cdef class Cursor:
@@ -101,6 +128,82 @@ cdef class Cursor:
         memcpy(&value, (<const char*>self.buf) + self.pos, 4)
         self.pos += 4
         return value
+
+    # -- Native engine: whole-column bulk reads (raise NeedMoreData on short) --
+
+    cpdef list read_string_column(self, Py_ssize_t n):
+        cdef:
+            const unsigned char* data = self.buf
+            Py_ssize_t pos = self.pos
+            Py_ssize_t size = self.size
+            list out = []
+            Py_ssize_t i, length, shift, end
+            unsigned char b
+        for i in range(n):
+            length = 0
+            shift = 0
+            while True:
+                if pos >= size:
+                    raise NeedMoreData()
+                b = data[pos]
+                pos += 1
+                length |= (<Py_ssize_t>(b & 0x7F)) << shift
+                if not (b & 0x80):
+                    break
+                shift += 7
+            end = pos + length
+            if end > size:
+                raise NeedMoreData()
+            out.append(PyUnicode_DecodeUTF8(<char*>data + pos, length, NULL))
+            pos = end
+        self.pos = pos
+        return out
+
+    cpdef list read_date_column(self, Py_ssize_t n):
+        cdef:
+            const unsigned char* data = self.buf
+            Py_ssize_t pos = self.pos
+            list out = []
+            Py_ssize_t i
+            unsigned int days
+            int y, m, d
+        if pos + n * 2 > self.size:
+            raise NeedMoreData()
+        for i in range(n):
+            days = data[pos] | (data[pos + 1] << 8)
+            pos += 2
+            _civil_from_days(days, &y, &m, &d)
+            out.append(date_new(y, m, d))
+        self.pos = pos
+        return out
+
+    cpdef list read_datetime_column(self, Py_ssize_t n):
+        cdef:
+            const unsigned char* data = self.buf
+            Py_ssize_t pos = self.pos
+            list out = []
+            Py_ssize_t i
+            unsigned long long secs
+            int rem, y, m, d, hh, mm, ss
+        if pos + n * 4 > self.size:
+            raise NeedMoreData()
+        for i in range(n):
+            secs = (
+                data[pos]
+                | (data[pos + 1] << 8)
+                | (data[pos + 2] << 16)
+                | (<unsigned long long>data[pos + 3] << 24)
+            )
+            pos += 4
+            _civil_from_days(<long long>(secs // 86400), &y, &m, &d)
+            rem = <int>(secs % 86400)
+            hh = rem // 3600
+            rem = rem % 3600
+            mm = rem // 60
+            ss = rem % 60
+            out.append(datetime_new(y, m, d, hh, mm, ss, 0, None))
+        self.pos = pos
+        return out
 
 
 # ---- RowBinary engine: base type with virtual read/write -------------------

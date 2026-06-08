@@ -1589,6 +1589,68 @@ class TestRowBinary:
         await binary.execute("DROP TABLE IF EXISTS rb_insert_cols")
 
 
+@pytest.mark.usefixtures("class_chclient")
+class TestNative:
+    # https://github.com/maximdanilchenko/aiochclient/issues/134
+    # The columnar Native read engine (Phase 1: numerics, String, FixedString,
+    # Date, DateTime (UTC), Bool, Nullable, Array).
+    NATIVE_DDL = """
+        CREATE TABLE native_t (
+            id UInt32, big Int64, neg Int16, score Float64, f32 Float32,
+            name String, fixed FixedString(4), created Date, ts DateTime,
+            flag Bool, opt Nullable(Int32), arr Array(UInt32), sarr Array(String)
+        ) ENGINE = Memory
+        """
+
+    def _native_client(self):
+        return ChClient(self.ch._http_client._session, native=True)
+
+    async def test_decode_matches_tsv(self):
+        native = self._native_client()
+        await native.execute("DROP TABLE IF EXISTS native_t")
+        await native.execute(self.NATIVE_DDL)
+        rows = [
+            (
+                i,
+                i * 1_000_000_000,
+                -i,
+                i + 0.5,
+                1.5,
+                f"name {i}",
+                "abcd",
+                dt.date(2021, 6, 1),
+                dt.datetime(2021, 6, 1, 12, 30, 0),
+                bool(i % 2),
+                (i if i % 2 else None),
+                [1, 2, 3],
+                ["alpha", "beta"],
+            )
+            for i in range(5)
+        ]
+        await native.execute("INSERT INTO native_t VALUES", *rows)
+        tsv_rows = [
+            r[:] for r in await self.ch.fetch("SELECT * FROM native_t ORDER BY id")
+        ]
+        bin_rows = [
+            r[:] for r in await native.fetch("SELECT * FROM native_t ORDER BY id")
+        ]
+        assert tsv_rows == bin_rows
+        await native.execute("DROP TABLE IF EXISTS native_t")
+
+    async def test_fetchval_iterate_and_mapping(self):
+        native = self._native_client()
+        assert await native.fetchval("SELECT 7::UInt32") == 7
+        record = await native.fetchrow("SELECT 1 AS a, 'x' AS b")
+        assert record["a"] == 1 and record["b"] == "x" and record[0] == 1
+        rows = [r[0] async for r in native.iterate("SELECT number FROM numbers(3)")]
+        assert rows == [0, 1, 2]
+
+    async def test_unsupported_type_raises(self):
+        native = self._native_client()
+        with pytest.raises(ChClientError):
+            await native.fetchval("SELECT 'b'::Enum8('a' = 1, 'b' = 2)")
+
+
 class TestErrorBody:
     # https://github.com/maximdanilchenko/aiochclient/issues/126
     # A non-200 response with an empty body must still raise a ChClientError

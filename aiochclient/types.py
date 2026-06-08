@@ -54,6 +54,61 @@ class Cursor:
     def read_float(self) -> float:
         return struct.unpack("<f", self.read(4))[0]
 
+    # -- Native engine: whole-column bulk reads (pure-Python fallback) --
+
+    def read_string_column(self, n: int) -> list:
+        buf = self.buf
+        size = len(buf)
+        pos = self.pos
+        out = []
+        for _ in range(n):
+            length = 0
+            shift = 0
+            while True:
+                if pos >= size:
+                    raise NeedMoreData
+                byte = buf[pos]
+                pos += 1
+                length |= (byte & 0x7F) << shift
+                if not byte & 0x80:
+                    break
+                shift += 7
+            end = pos + length
+            if end > size:
+                raise NeedMoreData
+            out.append(buf[pos:end].decode())
+            pos = end
+        self.pos = pos
+        return out
+
+    def read_date_column(self, n: int) -> list:
+        buf = self.buf
+        pos = self.pos
+        end = pos + n * 2
+        if end > len(buf):
+            raise NeedMoreData
+        out = [
+            RB_EPOCH_DATE
+            + dt.timedelta(days=buf[pos + 2 * i] | (buf[pos + 2 * i + 1] << 8))
+            for i in range(n)
+        ]
+        self.pos = end
+        return out
+
+    def read_datetime_column(self, n: int) -> list:
+        buf = self.buf
+        pos = self.pos
+        end = pos + n * 4
+        if end > len(buf):
+            raise NeedMoreData
+        out = []
+        for i in range(n):
+            p = pos + 4 * i
+            secs = buf[p] | (buf[p + 1] << 8) | (buf[p + 2] << 16) | (buf[p + 3] << 24)
+            out.append(RB_EPOCH_DATETIME + dt.timedelta(seconds=secs))
+        self.pos = end
+        return out
+
 
 _TZ_UNSET = object()
 
