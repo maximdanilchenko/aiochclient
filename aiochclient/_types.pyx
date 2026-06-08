@@ -1,5 +1,6 @@
 #cython: language_level=3
 import datetime as _dt
+import gc
 import json
 import re
 import struct
@@ -10,6 +11,9 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
+from cpython.list cimport PyList_GET_ITEM, PyList_GET_SIZE
+from cpython.ref cimport Py_INCREF
+from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM
 from cpython.datetime cimport (
     date,
     date_new,
@@ -1696,3 +1700,54 @@ cpdef Record record_new(tuple values, dict names):
     record._converters = None
     record._decoded = True
     return record
+
+
+cpdef list build_records(list columns, dict names):
+    """Transpose decoded ``columns`` into a list of :class:`Record` rows.
+
+    The Native engine decodes a block column-by-column; turning those parallel
+    lists into row records is the hottest step of a fetch. Doing the transpose
+    and the Record construction here — building each row tuple straight from the
+    column lists via the C API and filling the cdef class inline — avoids the
+    Python-level ``zip(*columns)``, the list comprehension and a per-row call.
+
+    Allocating tens of thousands of (GC-tracked) tuples and records in one go
+    otherwise keeps tripping the cyclic garbage collector mid-build, which is the
+    single biggest cost of a large fetch. None of these objects are garbage (they
+    are all about to be returned), so the collector is disabled for the duration
+    of the loop — this is a tight synchronous section with no ``await``, so no
+    other coroutine runs meanwhile — and its previous state is restored after.
+    """
+    cdef:
+        Py_ssize_t ncols = len(columns)
+        Py_ssize_t nrows, i, j
+        list out
+        tuple row
+        Record record
+        object column, item
+        bint gc_was_enabled
+    if ncols == 0:
+        return []
+    nrows = PyList_GET_SIZE(<object>PyList_GET_ITEM(columns, 0))
+    out = []
+    gc_was_enabled = gc.isenabled()
+    if gc_was_enabled:
+        gc.disable()
+    try:
+        for i in range(nrows):
+            row = PyTuple_New(ncols)
+            for j in range(ncols):
+                column = <object>PyList_GET_ITEM(columns, j)
+                item = <object>PyList_GET_ITEM(column, i)
+                Py_INCREF(item)
+                PyTuple_SET_ITEM(row, j, item)
+            record = Record.__new__(Record)
+            record._row = row
+            record._names = names
+            record._converters = None
+            record._decoded = True
+            out.append(record)
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+    return out

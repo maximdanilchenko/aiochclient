@@ -10,6 +10,7 @@ one, which is what lets this engine rival the columnar C clients without numpy.
 
 import array
 import datetime as dt
+import gc as _gc
 import re
 import sys
 from decimal import Decimal
@@ -31,6 +32,25 @@ try:
     from aiochclient._types import Cursor  # noqa: F401
 except ImportError:
     from aiochclient.types import Cursor  # noqa: F401
+
+# Compiled transpose+Record builder; pure-Python fallback below.
+try:
+    from aiochclient._types import build_records
+except ImportError:
+
+    def build_records(columns, names):
+        # Building all rows at once otherwise trips the cyclic GC mid-build; the
+        # objects are all about to be returned, so suppress it for this tight,
+        # await-free section and restore the collector afterwards.
+        gc_was_enabled = _gc.isenabled()
+        if gc_was_enabled:
+            _gc.disable()
+        try:
+            return [record_from_decoded(values, names) for values in zip(*columns)]
+        finally:
+            if gc_was_enabled:
+                _gc.enable()
+
 
 _LE = sys.byteorder == "little"
 
@@ -136,9 +156,23 @@ def _read_prefix(cursor, ctype):
 
 
 def decode_column_with_prefix(cursor, n, ctype):
-    """Read a whole top-level column: its state prefix, then its body."""
-    _read_prefix(cursor, ctype)
-    return decode_column(cursor, n, ctype)
+    """Read a whole top-level column: its state prefix, then its body.
+
+    Decoding a column allocates its whole value list (and, for strings/objects,
+    every element) at once; like the row build, that mass allocation otherwise
+    trips the cyclic GC mid-decode. This runs synchronously inside a single
+    ``reader.parse`` call (no ``await``), so the collector is disabled for it and
+    restored afterwards.
+    """
+    gc_was_enabled = _gc.isenabled()
+    if gc_was_enabled:
+        _gc.disable()
+    try:
+        _read_prefix(cursor, ctype)
+        return decode_column(cursor, n, ctype)
+    finally:
+        if gc_was_enabled:
+            _gc.enable()
 
 
 def decode_column(cursor, n, ctype):
@@ -270,7 +304,7 @@ async def blocks_from_native(
         if not num_rows:
             continue
         name_map = {name: index for index, name in enumerate(names)}
-        yield [record_from_decoded(values, name_map) for values in zip(*columns)]
+        yield build_records(columns, name_map)
 
 
 async def rows_from_native(

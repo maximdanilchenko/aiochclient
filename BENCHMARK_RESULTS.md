@@ -30,32 +30,33 @@ real-world-ish workload. Reproduce with `benchmarks_vs_libs.py`.
 
 | Client | Protocol | Async | SELECT (decode) | INSERT |
 |:-------|:---------|:-----:|----------------:|-------:|
-| **aiochclient — Native** | HTTP | ✅ | **~730k** | ~330k |
+| **aiochclient — Native** | HTTP | ✅ | **~1,000k** | ~330k |
 | **aiochclient — RowBinary** | HTTP | ✅ | ~370k | ~320k |
 | **aiochclient — TSV** | HTTP | ✅ | ~305k | ~245k |
-| clickhouse-connect | HTTP | ✅ | **~820k** | **~450k** |
+| clickhouse-connect | HTTP | ✅ | ~820k | **~450k** |
 | asynch | native | ✅ | ~108k | ~165k |
 | clickhouse-driver | native | ❌ (sync) | ~440k | ~370k |
 
-Numbers are indicative (best-of-8; they vary ±10–20% run to run, INSERT more so)
-and depend on the data, the ClickHouse version and the machine.
+Numbers are indicative (best-of-8 on an otherwise-idle machine; they vary
+±10–20% run to run, INSERT more so) and depend on the data, the ClickHouse
+version and the machine. They are also sensitive to background CPU load — on a
+busy machine the absolute figures fall (the columnar decode is single-threaded),
+though the ordering holds.
 
 ## Takeaways
 
-- **aiochclient's Native engine** is the fastest async option on SELECT here and
-  is within reach of clickhouse-connect — while keeping aiochclient's small,
+- **aiochclient's Native engine is the fastest SELECT here** (~1M rows/sec),
+  ahead of clickhouse-connect, while keeping aiochclient's small,
   dependency-light footprint (**no numpy**). It decodes ClickHouse's columnar
-  `Native` format whole-column-at-once: fixed-width numerics straight through the
-  stdlib `array` module, strings/dates in the compiled Cursor, then one transpose
-  to rows.
-- **clickhouse-connect is still the fastest** on SELECT (and INSERT). It is the
-  official client and decodes the columnar binary format in C on top of numpy;
-  the residual SELECT gap to aiochclient-Native is essentially the cost of
-  wrapping each row in aiochclient's richer `Record` object — the raw
-  column-decode-and-transpose throughput is comparable.
+  `Native` format whole-column-at-once — fixed-width numerics straight through
+  the stdlib `array` module, strings/dates in the compiled Cursor, then one
+  transpose to rows — and, crucially, suppresses the cyclic garbage collector
+  while it allocates the result objects (see below).
+- **clickhouse-connect** is the official client and decodes the columnar binary
+  format in C on top of numpy; it is the next fastest on SELECT and the fastest
+  on INSERT.
 - **clickhouse-driver** (native protocol, C extensions) is fast but
   **synchronous** — not usable as-is in an asyncio app without a thread pool.
-  aiochclient-Native is faster than it on SELECT over plain HTTP.
 - **RowBinary** remains the best *row-oriented* engine (and the one used when
   streaming row-by-row via `iterate`); **TSV** is the zero-Cython baseline.
 - **asynch** is the slowest on SELECT here despite the native protocol — its
@@ -65,6 +66,10 @@ and depend on the data, the ClickHouse version and the machine.
 
 - The SELECT figures fully materialize every row (`row[:]`), so they measure
   decode + `Record` construction, not lazy passthrough.
+- The Native engine's big jump (from ~730k) came from **not running the cyclic
+  GC while a fetch allocates its tens of thousands of result objects** — none of
+  which are garbage. The collector is disabled only for the synchronous,
+  `await`-free decode/build sections and restored afterwards.
 - INSERT throughput is closer across clients: aiochclient-Native encodes numeric
   columns in bulk via `array`, but variable-width / mixed columns still encode
   per value, so its INSERT lands near RowBinary and clickhouse-driver rather than

@@ -1,4 +1,5 @@
 import datetime as dt
+import gc
 import json
 import os
 from decimal import Decimal
@@ -1775,6 +1776,46 @@ class TestNative:
         # raise a clear error rather than silently misread the column.
         with pytest.raises(ChClientError):
             await native.fetchval("SELECT (1.0, 2.0)::Point")
+
+    # -- GC-suppression safety (the Native materialization disables the cyclic
+    # collector for its synchronous build/decode sections) --
+
+    async def test_fetch_restores_gc_state(self):
+        native = self._native_client()
+        was_enabled = gc.isenabled()
+        gc.enable()
+        try:
+            await native.fetch("SELECT number FROM numbers(5000)")
+            assert gc.isenabled(), "fetch must leave the collector enabled"
+        finally:
+            if not was_enabled:
+                gc.disable()
+
+    async def test_fetch_preserves_caller_gc_disabled(self):
+        # If the caller already turned GC off, a fetch must not turn it back on.
+        native = self._native_client()
+        was_enabled = gc.isenabled()
+        gc.disable()
+        try:
+            await native.fetch("SELECT number FROM numbers(5000)")
+            assert not gc.isenabled(), "fetch must not re-enable a caller-disabled GC"
+        finally:
+            if was_enabled:
+                gc.enable()
+
+    async def test_gc_state_restored_after_decode_error(self):
+        # An error raised mid-decode must still restore the collector (the
+        # disable/enable is guarded by try/finally on every path).
+        native = self._native_client()
+        was_enabled = gc.isenabled()
+        gc.enable()
+        try:
+            with pytest.raises(ChClientError):
+                await native.fetchval("SELECT (1.0, 2.0)::Point")
+            assert gc.isenabled()
+        finally:
+            if not was_enabled:
+                gc.disable()
 
 
 class TestErrorBody:

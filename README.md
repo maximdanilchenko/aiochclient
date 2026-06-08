@@ -187,27 +187,27 @@ apply the timezone).
 Engine comparison on mixed-type rows, fully decoded, with the Cython extension
 built:
 
-| Engine      | SELECT (decode) | INSERT         |
-|:------------|----------------:|---------------:|
-| `TSV`       | ~305k rows/sec  | ~245k rows/sec |
-| `RowBinary` | ~370k rows/sec  | ~320k rows/sec |
-| `Native`    | ~730k rows/sec  | ~330k rows/sec |
+| Engine      | SELECT (decode) | INSERT          |
+|:------------|----------------:|----------------:|
+| `TSV`       | ~305k rows/sec  | ~245k rows/sec  |
+| `RowBinary` | ~370k rows/sec  | ~320k rows/sec  |
+| `Native`    | ~1,000k rows/sec | ~330k rows/sec |
 
 Against the popular Python ClickHouse clients on the same workload, the Native
-engine is the fastest async SELECT option short of clickhouse-connect, and ahead
-of the synchronous clickhouse-driver:
+engine is the fastest SELECT, ahead of clickhouse-connect and of the synchronous
+clickhouse-driver:
 
-| Client                              | SELECT        | INSERT        |
-|:------------------------------------|--------------:|--------------:|
-| aiochclient — Native (HTTP, async)  | ~730k rows/sec | ~330k rows/sec |
-| clickhouse-connect (HTTP, async)    | ~820k rows/sec | ~450k rows/sec |
-| clickhouse-driver (native, sync)    | ~440k rows/sec | ~370k rows/sec |
-| asynch (native, async)              | ~108k rows/sec | ~165k rows/sec |
+| Client                              | SELECT          | INSERT         |
+|:------------------------------------|----------------:|---------------:|
+| aiochclient — Native (HTTP, async)  | ~1,000k rows/sec | ~330k rows/sec |
+| clickhouse-connect (HTTP, async)    | ~820k rows/sec   | ~450k rows/sec |
+| clickhouse-driver (native, sync)    | ~440k rows/sec   | ~370k rows/sec |
+| asynch (native, async)              | ~108k rows/sec   | ~165k rows/sec |
 
-Indicative best-of-8 figures (Apple M1 Pro, ClickHouse 26.5, single connection);
-they vary run to run and with the data. Full methodology lives in
-[BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md); reproduce with `benchmarks_vs_libs.py`
-(clients) and `benchmarks.py` (engines).
+Indicative best-of-8 figures on an otherwise-idle Apple M1 Pro (ClickHouse 26.5,
+single connection); they vary run to run, with the data, and with background CPU
+load. Full methodology lives in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md);
+reproduce with `benchmarks_vs_libs.py` (clients) and `benchmarks.py` (engines).
 
 ## Documentation
 
