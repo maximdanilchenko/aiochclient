@@ -1168,10 +1168,17 @@ class TestFetching:
         # https://github.com/maximdanilchenko/aiochclient/issues/98
         rows = await self.ch.fetch("EXPLAIN SELECT 1")
         assert rows
-        assert all(isinstance(row[0], str) for row in rows)
+        # ClickHouse 26.7 made the `pretty` plan format the default, and it puts
+        # a blank line between the output columns and the plan tree. A blank TSV
+        # line decodes to an empty Record (that is what the `WITH TOTALS`
+        # separator looks like), so only the non-empty rows carry plan text.
+        assert any(len(row) for row in rows)
+        assert all(isinstance(row[0], str) for row in rows if len(row))
 
         value = await self.ch.fetchval("EXPLAIN SYNTAX SELECT 1 + 1")
-        assert value == "SELECT 1 + 1"
+        # ClickHouse 26.7 prints operators as function calls; older servers
+        # printed the operator form.
+        assert value in ("SELECT plus(1, 1)", "SELECT 1 + 1")
 
     async def test_quoted_string(self):
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")
