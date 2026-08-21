@@ -1013,6 +1013,33 @@ class TestTypes:
         assert await self.ch.fetchval("SELECT a FROM t_issue_123") == value
         await self.ch.execute("DROP TABLE IF EXISTS t_issue_123")
 
+    async def test_geo_types(self):
+        # https://github.com/maximdanilchenko/aiochclient/issues/136
+        # Exactly representable floats, so equality holds on every engine.
+        point = (3.0, 4.0)
+        ring = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+        line = [(0.0, 0.0), (1.0, 1.0), (2.0, 4.0)]
+        multi_line = [line, [(5.0, 5.0), (6.0, 6.0)]]
+        polygon = [ring, [(4.0, 4.0), (5.0, 4.0), (5.0, 5.0)]]
+        multi_polygon = [polygon, [[(-1.0, -1.0), (-2.0, -1.0), (-2.0, -2.0)]]]
+        await self.ch.execute("DROP TABLE IF EXISTS t_geo")
+        await self.ch.execute(
+            "CREATE TABLE t_geo (p Point, r Ring, ls LineString, "
+            "mls MultiLineString, pg Polygon, mpg MultiPolygon) ENGINE = Memory"
+        )
+        await self.engine_ch.execute(
+            "INSERT INTO t_geo VALUES",
+            (point, ring, line, multi_line, polygon, multi_polygon),
+        )
+        record = await self.engine_ch.fetchrow("SELECT * FROM t_geo")
+        assert record["p"] == point
+        assert record["r"] == ring
+        assert record["ls"] == line
+        assert record["mls"] == multi_line
+        assert record["pg"] == polygon
+        assert record["mpg"] == multi_polygon
+        await self.ch.execute("DROP TABLE IF EXISTS t_geo")
+
     async def test_map_with_multiple_entries(self):
         # https://github.com/maximdanilchenko/aiochclient/issues/118
         value = {"a": 1, "b": 2, "c": 3}
@@ -1168,10 +1195,17 @@ class TestFetching:
         # https://github.com/maximdanilchenko/aiochclient/issues/98
         rows = await self.ch.fetch("EXPLAIN SELECT 1")
         assert rows
-        assert all(isinstance(row[0], str) for row in rows)
+        # ClickHouse 26.7 made the `pretty` plan format the default, and it puts
+        # a blank line between the output columns and the plan tree. A blank TSV
+        # line decodes to an empty Record (that is what the `WITH TOTALS`
+        # separator looks like), so only the non-empty rows carry plan text.
+        assert any(len(row) for row in rows)
+        assert all(isinstance(row[0], str) for row in rows if len(row))
 
         value = await self.ch.fetchval("EXPLAIN SYNTAX SELECT 1 + 1")
-        assert value == "SELECT 1 + 1"
+        # ClickHouse 26.7 prints operators as function calls; older servers
+        # printed the operator form.
+        assert value in ("SELECT plus(1, 1)", "SELECT 1 + 1")
 
     async def test_quoted_string(self):
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")
@@ -1806,10 +1840,10 @@ class TestNative:
 
     async def test_unsupported_type_raises(self):
         native = self._native_client()
-        # Geo types (here Point) are not in the type mapping, so decoding must
-        # raise a clear error rather than silently misread the column.
+        # Interval types are not in the type mapping, so decoding must raise a
+        # clear error rather than silently misread the column.
         with pytest.raises(ChClientError):
-            await native.fetchval("SELECT (1.0, 2.0)::Point")
+            await native.fetchval("SELECT INTERVAL 1 DAY")
 
     # -- GC-suppression safety (the Native materialization disables the cyclic
     # collector for its synchronous build/decode sections) --
@@ -1845,7 +1879,7 @@ class TestNative:
         gc.enable()
         try:
             with pytest.raises(ChClientError):
-                await native.fetchval("SELECT (1.0, 2.0)::Point")
+                await native.fetchval("SELECT INTERVAL 1 DAY")
             assert gc.isenabled()
         finally:
             if not was_enabled:

@@ -733,6 +733,63 @@ class ArrayType(BaseType):
         return b"[" + b",".join(py2ch(elem) for elem in value) + b"]"
 
 
+# ClickHouse geo types are named composites: each one *is* the Tuple/Array
+# below, on every wire format, so each class inherits that composite's codec and
+# just hands its own composite name to the base constructor.
+class PointType(TupleType):
+    """``Point`` is ``Tuple(Float64, Float64)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Tuple(Float64, Float64)", **kwargs)
+
+
+class RingType(ArrayType):
+    """``Ring`` is ``Array(Point)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Array(Point)", **kwargs)
+
+
+class LineStringType(ArrayType):
+    """``LineString`` is ``Array(Point)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Array(Point)", **kwargs)
+
+
+class MultiLineStringType(ArrayType):
+    """``MultiLineString`` is ``Array(LineString)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Array(LineString)", **kwargs)
+
+
+class PolygonType(ArrayType):
+    """``Polygon`` is ``Array(Ring)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Array(Ring)", **kwargs)
+
+
+class MultiPolygonType(ArrayType):
+    """``MultiPolygon`` is ``Array(Polygon)``."""
+
+    __slots__ = ()
+
+    def __init__(self, name: str, **kwargs):
+        super().__init__("Array(Polygon)", **kwargs)
+
+
 class NestedType(BaseType):
     __slots__ = ("name", "types")
 
@@ -931,6 +988,12 @@ CH_TYPES_MAPPING = {
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
     "Nested": NestedType,
+    "Point": PointType,
+    "Ring": RingType,
+    "LineString": LineStringType,
+    "MultiLineString": MultiLineStringType,
+    "Polygon": PolygonType,
+    "MultiPolygon": MultiPolygonType,
 }
 
 PY_TYPES_MAPPING = {
@@ -969,6 +1032,27 @@ def what_py_type(name: str, container: bool = False) -> BaseType:
 def what_py_converter(name: str, container: bool = False) -> Callable:
     """Returns needed type class from clickhouse type name"""
     return what_py_type(name, container).convert
+
+
+_GEO_CLASSES = (
+    PointType,
+    RingType,
+    LineStringType,
+    MultiLineStringType,
+    PolygonType,
+    MultiPolygonType,
+)
+
+# Geo type name -> the composite it is stored as, derived from the classes
+# themselves (each one normalises its ``name`` to that composite). The columnar
+# engine dispatches on the type *string* rather than on a type object — a Native
+# Array/Tuple column is offsets plus sub-columns, not per-value RowBinary — so it
+# needs the name; see ``native.decode_column``.
+GEO_WIRE_TYPES = {
+    name: ch_type(name).name
+    for name, ch_type in CH_TYPES_MAPPING.items()
+    if issubclass(ch_type, _GEO_CLASSES)
+}
 
 
 def read_column(cursor, reader, n: int) -> list:

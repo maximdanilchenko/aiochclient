@@ -274,6 +274,12 @@ vice-versa.
 | `LowCardinality(T)`  | `T`                     |
 | `Map(T1, T2)`        | `Dict[T1, T2]`          |
 | `Nested(T1, T2, ...)` | `List[Tuple[T1, T2, ...], Tuple[T1, T2, ...]]` |
+| `Point`              | `Tuple[float, float]`   |
+| `Ring`               | `List[Tuple[float, float]]` |
+| `LineString`         | `List[Tuple[float, float]]` |
+| `MultiLineString`    | `List[List[Tuple[float, float]]]` |
+| `Polygon`            | `List[List[Tuple[float, float]]]` |
+| `MultiPolygon`       | `List[List[List[Tuple[float, float]]]]` |
 
 
 ## Connection Pool Settings
