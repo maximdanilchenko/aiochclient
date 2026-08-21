@@ -33,6 +33,13 @@ try:
 except ImportError:
     from aiochclient.types import Cursor  # noqa: F401
 
+# Geo type name -> the composite it is stored as (derived from the geo type
+# classes); this engine dispatches on the type string, not on a type object.
+try:
+    from aiochclient._types import GEO_WIRE_TYPES
+except ImportError:
+    from aiochclient.types import GEO_WIRE_TYPES
+
 # Compiled String-column encoder; pure-Python fallback below.
 try:
     from aiochclient._types import write_string_column
@@ -279,6 +286,11 @@ def decode_column(cursor, n, ctype):
         # Array(Tuple(...)) of its sub-fields (shared offsets, then each field
         # as a flat sub-column), so decode it as such.
         return decode_column(cursor, n, "Array(Tuple(" + ctype[7:-1] + "))")
+    geo = GEO_WIRE_TYPES.get(ctype)
+    if geo is not None:
+        # A geo column is its composite on the wire, and a composite column is
+        # laid out as sub-columns, not as per-value RowBinary.
+        return decode_column(cursor, n, geo)
     # Generic per-value fallback through the compiled RowBinary readers — covers
     # Decimal, DateTime64, Enum, UUID, IPv4/6, Int128/256 and any other
     # fixed-layout scalar whose Native column is its RowBinary values back to back.
@@ -387,7 +399,10 @@ def _wire_type(ctype):
             + ", ".join(_wire_element(s) for s in _split_args(ctype[6:-1]))
             + ")"
         )
-    return ctype
+    # A geo column is sent as its composite; the server converts the block back
+    # to the column's declared type. Recurse: the composite may be Array(Point).
+    geo = GEO_WIRE_TYPES.get(ctype)
+    return _wire_type(geo) if geo is not None else ctype
 
 
 def _wire_element(spec):

@@ -12,6 +12,9 @@ Performance (Native engine):
 
 New:
 - `insert_block_size` (default 8192) controls the Native-INSERT block size.
+- Geo types (`Point`, `Ring`, `LineString`, `MultiLineString`, `Polygon`,
+  `MultiPolygon`) on all three engines
+  ([#136](https://github.com/maximdanilchenko/aiochclient/issues/136)).
 
 Note:
 - A multi-block native INSERT is **not atomic** on a client-side *encoding*

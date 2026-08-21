@@ -981,11 +981,16 @@ cdef class DateTime64Type(_RBType):
 cdef class TupleType(_RBType):
 
     cdef:
-        str name
+        # readonly: the geo subclasses normalise ``name`` to the composite they
+        # are, and GEO_WIRE_TYPES reads it back for the columnar engine.
+        readonly str name
         bint container
         tuple types
 
-    def __cinit__(self, str name, bint container):
+    # The name is parsed in __init__ (not __cinit__) so that a subclass can pass
+    # its own name down: Cython runs a base __cinit__ before the subclass and
+    # with the original arguments. See PointType below.
+    def __init__(self, str name, bint container):
         self.name = name
         self.container = container
         cdef str tps = RE_TUPLE.findall(name)[0]
@@ -1081,11 +1086,12 @@ cdef class MapType(_RBType):
 cdef class ArrayType(_RBType):
 
     cdef:
-        str name
+        readonly str name
         bint container
         type
 
-    def __cinit__(self, str name, bint container):
+    # Parsed in __init__ for the geo subclasses; see TupleType above.
+    def __init__(self, str name, bint container):
         self.name = name
         self.container = container
         self.type = what_py_type(
@@ -1118,6 +1124,50 @@ cdef class ArrayType(_RBType):
 
     cpdef list convert(self, bytes value):
         return self.p_type(value.decode())
+
+
+# ClickHouse geo types are named composites (see types.py): each class inherits
+# the Tuple/Array it is and passes that composite's name to the base.
+cdef class PointType(TupleType):
+    """``Point`` is ``Tuple(Float64, Float64)``."""
+
+    def __init__(self, str name, bint container=False):
+        TupleType.__init__(self, "Tuple(Float64, Float64)", container)
+
+
+cdef class RingType(ArrayType):
+    """``Ring`` is ``Array(Point)``."""
+
+    def __init__(self, str name, bint container=False):
+        ArrayType.__init__(self, "Array(Point)", container)
+
+
+cdef class LineStringType(ArrayType):
+    """``LineString`` is ``Array(Point)``."""
+
+    def __init__(self, str name, bint container=False):
+        ArrayType.__init__(self, "Array(Point)", container)
+
+
+cdef class MultiLineStringType(ArrayType):
+    """``MultiLineString`` is ``Array(LineString)``."""
+
+    def __init__(self, str name, bint container=False):
+        ArrayType.__init__(self, "Array(LineString)", container)
+
+
+cdef class PolygonType(ArrayType):
+    """``Polygon`` is ``Array(Ring)``."""
+
+    def __init__(self, str name, bint container=False):
+        ArrayType.__init__(self, "Array(Ring)", container)
+
+
+cdef class MultiPolygonType(ArrayType):
+    """``MultiPolygon`` is ``Array(Polygon)``."""
+
+    def __init__(self, str name, bint container=False):
+        ArrayType.__init__(self, "Array(Polygon)", container)
 
 
 cdef class NestedType(_RBType):
@@ -1451,6 +1501,12 @@ cdef dict CH_TYPES_MAPPING = {
     "IPv4": IPv4Type,
     "IPv6": IPv6Type,
     "Nested": NestedType,
+    "Point": PointType,
+    "Ring": RingType,
+    "LineString": LineStringType,
+    "MultiLineString": MultiLineStringType,
+    "Polygon": PolygonType,
+    "MultiPolygon": MultiPolygonType,
 }
 
 
@@ -1470,6 +1526,26 @@ cpdef what_py_type(str name, bint container = False):
 cpdef what_py_converter(str name, bint container = False):
     """ Returns needed type class from clickhouse type name """
     return what_py_type(name, container).convert
+
+
+cdef tuple _GEO_CLASSES = (
+    PointType,
+    RingType,
+    LineStringType,
+    MultiLineStringType,
+    PolygonType,
+    MultiPolygonType,
+)
+
+# Geo type name -> the composite it is stored as, derived from the classes
+# themselves. Python-visible (unlike the cdef CH_TYPES_MAPPING) because native.py
+# imports it: the columnar engine dispatches on the type string, not on a type
+# object.
+GEO_WIRE_TYPES = {
+    name: ch_type(name).name
+    for name, ch_type in CH_TYPES_MAPPING.items()
+    if issubclass(ch_type, _GEO_CLASSES)
+}
 
 
 cdef bytes unconvert_str(object value):
