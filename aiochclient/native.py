@@ -29,9 +29,9 @@ from aiochclient.records import Record, record_from_decoded
 
 # Use the compiled Cursor (with bulk column reads) when available.
 try:
-    from aiochclient._types import Cursor  # noqa: F401
+    from aiochclient._types import Cursor, to_epoch_micros  # noqa: F401
 except ImportError:
-    from aiochclient.types import Cursor  # noqa: F401
+    from aiochclient.types import Cursor, to_epoch_micros  # noqa: F401
 
 # Compiled String-column encoder; pure-Python fallback below.
 try:
@@ -213,10 +213,10 @@ def decode_column(cursor, n, ctype):
         return [data[i * width : (i + 1) * width].decode() for i in range(n)]
     if ctype == "Date":
         return cursor.read_date_column(n)
-    if ctype == "DateTime" or ctype.startswith("DateTime("):
-        # The Native format does not carry the per-column timezone (it always
-        # ships the UTC epoch), so DateTime is returned as a naive UTC datetime.
-        # The TSV/RowBinary engines apply the column timezone instead.
+    if ctype == "DateTime":
+        # ClickHouse's Native header drops the timezone of a DateTime('TZ')
+        # column (it ships plain "DateTime"; DateTime64 keeps its zone), so a
+        # timezone DateTime can only come back as naive UTC on this engine.
         return cursor.read_datetime_column(n)
     if ctype.startswith("Nullable("):
         inner = ctype[9:-1]
@@ -341,7 +341,6 @@ async def rows_from_native(
 # Epochs for the null-slot defaults and the bulk Date/DateTime encoders.
 _EPOCH_DATE = dt.date(1970, 1, 1)
 _EPOCH_DATETIME = dt.datetime(1970, 1, 1)
-_ONE_SECOND = dt.timedelta(seconds=1)
 
 
 def _write_varint(value):
@@ -461,10 +460,10 @@ def encode_column(values, ctype):
             column.byteswap()
         return column.tobytes()
     if ctype == "DateTime":
-        # Naive UTC seconds (matches the no-timezone DateTime writer). Timezone
-        # DateTime / DateTime64 keep the per-value writer path below.
+        # Naive UTC / aware seconds (matches the no-timezone DateTime writer).
+        # Timezone DateTime / DateTime64 keep the per-value writer path below.
         column = array.array(
-            "I", [(v - _EPOCH_DATETIME) // _ONE_SECOND for v in values]
+            "I", [to_epoch_micros(v, None) // 1_000_000 for v in values]
         )
         if not _LE:
             column.byteswap()

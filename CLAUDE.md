@@ -114,9 +114,12 @@ supported Python is 3.10 (`python_requires` in `setup.py`).
 - Query `params` use `str.format`, so literal `{`/`}` in SQL (e.g. cluster macros) must be
   escaped as `{{`/`}}`.
 - The TSV streaming backend asserts the response ends on a line boundary (`assert not buffer`).
-- **Native engine specifics**: `decode=False` (raw bytes) is TSV-only; the Native format
-  carries no per-column timezone, so a tz-aware `DateTime`/`DateTime64` comes back as naive
-  UTC. A multi-block native INSERT is **not atomic** on a client-side encoding error (blocks
+- **Timezones**: a `DateTime('TZ')` / `DateTime64(P, 'TZ')` column decodes to a tz-aware
+  `datetime` (`zoneinfo`); a column without a zone stays naive. Writers accept naive (column
+  wall-clock) and aware (any zone) values. One server quirk: the Native header ships a
+  `DateTime('TZ')` column as plain `DateTime` (DateTime64 keeps its zone), so that column is
+  naive UTC on the native engine only.
+- **Native engine specifics**: `decode=False` (raw bytes) is TSV-only. A multi-block native INSERT is **not atomic** on a client-side encoding error (blocks
   already streamed are committed) — `insert_block_size=0` forces a single atomic block. The
   GC is disabled inside the synchronous decode/build sections of a fetch (mass allocation
   otherwise trips the cyclic collector); it is always restored via `try/finally`, and those

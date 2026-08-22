@@ -179,9 +179,9 @@ Because binary encoding is type-specific, a binary INSERT first looks up the
 target column types (one lightweight query) and encodes the rows to match them.
 
 A couple of `native=True` caveats: `decode=False` (raw bytes) is a TSV-only
-feature, and the Native format does not carry a column's timezone, so a tz-aware
-`DateTime`/`DateTime64` comes back as a naive UTC `datetime` (TSV and RowBinary
-apply the timezone).
+feature, and ClickHouse's Native header drops the timezone of a `DateTime('TZ')`
+column (`DateTime64` keeps it), so that one column comes back as a naive UTC
+`datetime` on the native engine (TSV and RowBinary return it tz-aware).
 
 A native INSERT streams its body as several Native blocks so the server can
 insert one while the client encodes the next (`insert_block_size` rows per block,
@@ -259,7 +259,9 @@ vice-versa.
 | `Enum16`             | `str`                   |
 | `Date`               | `datetime.date`         |
 | `DateTime`           | `datetime.datetime`     |
+| `DateTime('TZ')`     | tz-aware `datetime`     |
 | `DateTime64`         | `datetime.datetime`     |
+| `DateTime64(P, 'TZ')`| tz-aware `datetime`     |
 | `Decimal`            | `decimal.Decimal`       |
 | `Decimal32`          | `decimal.Decimal`       |
 | `Decimal64`          | `decimal.Decimal`       |
@@ -273,6 +275,12 @@ vice-versa.
 | `Nullable(T)`        | `None` or `T`           |
 | `LowCardinality(T)`  | `T`                     |
 | `Map(T1, T2)`        | `Dict[T1, T2]`          |
+
+A column declared with a timezone decodes to a `datetime` carrying that zone
+(`zoneinfo.ZoneInfo`); a column without one stays naive. On INSERT a naive
+`datetime` is taken as wall-clock time in the column's zone (UTC for a column
+without one), and a tz-aware `datetime` of any zone is stored as the instant it
+denotes.
 | `Nested(T1, T2, ...)` | `List[Tuple[T1, T2, ...], Tuple[T1, T2, ...]]` |
 
 

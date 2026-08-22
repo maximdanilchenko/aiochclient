@@ -6,6 +6,7 @@ from decimal import Decimal
 from enum import Enum, IntEnum
 from ipaddress import IPv4Address, IPv6Address
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import aiohttp
 import httpx
@@ -19,6 +20,9 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 def uuid():
     return uuid4()
+
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 @pytest.fixture
@@ -73,7 +77,7 @@ def rows(uuid):
             [[1, 2, 3], [1, 2], [6, 7]],
             IPv4Address('116.253.40.133'),
             IPv6Address('2001:44c8:129:2632:33:0:252:2'),
-            dt.datetime(2018, 9, 21, 10, 32, 23, 999000),
+            dt.datetime(2018, 9, 21, 10, 32, 23, 999000, tzinfo=MOSCOW),
             True,
             {"hello": "world {' and other things"},
             {"hello": {"inner": "world {' and other things"}},
@@ -174,7 +178,8 @@ async def all_types_db(chclient, rows):
     await chclient.execute("DROP TABLE IF EXISTS test_cache")
     await chclient.execute("DROP TABLE IF EXISTS test_cache_mv")
     await chclient.execute("DROP TABLE IF EXISTS test_insert_file")
-    await chclient.execute("""
+    await chclient.execute(
+        """
     CREATE TABLE all_types (uint8 UInt8,
                             uint16 UInt16,
                             uint32 UInt32,
@@ -228,27 +233,34 @@ async def all_types_db(chclient, rows):
                             nested_int Nested(value1 Integer, value2 Integer),
                             nested_str_date Nested(value1 String, value2 Date)
                             ) ENGINE = Memory
-    """)
-    await chclient.execute("""
+    """
+    )
+    await chclient.execute(
+        """
         CREATE TABLE test_cache (
           key           String,
           int32Cache    AggregateFunction(avg, Int32),
           float32Cache  SimpleAggregateFunction(sum, Float64))
         ENGINE = AggregatingMergeTree()
         ORDER BY key
-        """)
-    await chclient.execute("""
+        """
+    )
+    await chclient.execute(
+        """
         CREATE MATERIALIZED VIEW test_cache_mv TO test_cache AS
           SELECT avgState(int32) AS int32Cache, sum(float32) AS float32Cache
           FROM all_types
-        """)
-    await chclient.execute("""
+        """
+    )
+    await chclient.execute(
+        """
         CREATE TABLE test_insert_file(
             uint32  UInt32,
             string  String,
             date    Date
         ) ENGINE = Memory
-        """)
+        """
+    )
     await chclient.execute("INSERT INTO all_types VALUES", *rows)
 
 
@@ -257,7 +269,7 @@ def class_chclient(chclient, all_types_db, rows, request):
     request.cls.ch = chclient
     cls_rows = rows
     cls_rows[1][45] = dt.datetime(
-        2019, 1, 1, 3, 0
+        2019, 1, 1, 3, 0, tzinfo=MOSCOW
     )  # DateTime64 always returns datetime type
     request.cls.rows = [tuple(r) for r in cls_rows]
 
@@ -299,9 +311,7 @@ class TestClient:
 @pytest.mark.types
 @pytest.mark.usefixtures("class_chclient", "class_engine")
 class TestTypes:
-    # The Native format ships DateTime64 without its timezone, so a tz-aware
-    # column comes back as naive UTC and cannot match the tz-aware TSV value.
-    NATIVE_UNSUPPORTED = {"datetime64"}
+    NATIVE_UNSUPPORTED = set()
 
     # The binary engines decode Float32 from its exact 4-byte IEEE-754 value,
     # whereas TSV ships ClickHouse's shorter text rounding (e.g. 23.432 vs
@@ -928,7 +938,7 @@ class TestTypes:
         assert await self.select_field_bytes("ipv6") == b"2001:44c8:129:2632:33:0:252:2"
 
     async def test_datetime64(self):
-        result = dt.datetime(2018, 9, 21, 10, 32, 23, 999000)
+        result = dt.datetime(2018, 9, 21, 10, 32, 23, 999000, tzinfo=MOSCOW)
         assert await self.select_field("datetime64") == result
         record = await self.select_record("datetime64")
         assert record[0] == result
@@ -1168,10 +1178,17 @@ class TestFetching:
         # https://github.com/maximdanilchenko/aiochclient/issues/98
         rows = await self.ch.fetch("EXPLAIN SELECT 1")
         assert rows
-        assert all(isinstance(row[0], str) for row in rows)
+        # ClickHouse 26.7 made the `pretty` plan format the default, and it puts
+        # a blank line between the output columns and the plan tree. A blank TSV
+        # line decodes to an empty Record (that is what the `WITH TOTALS`
+        # separator looks like), so only the non-empty rows carry plan text.
+        assert any(len(row) for row in rows)
+        assert all(isinstance(row[0], str) for row in rows if len(row))
 
         value = await self.ch.fetchval("EXPLAIN SYNTAX SELECT 1 + 1")
-        assert value == "SELECT 1 + 1"
+        # ClickHouse 26.7 prints operators as function calls; older servers
+        # printed the operator form.
+        assert value in ("SELECT plus(1, 1)", "SELECT 1 + 1")
 
     async def test_quoted_string(self):
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")
@@ -1579,7 +1596,8 @@ class TestRowBinary:
     async def test_insert_round_trip(self):
         binary = self._binary_client()
         await binary.execute("DROP TABLE IF EXISTS rb_insert")
-        await binary.execute("""
+        await binary.execute(
+            """
             CREATE TABLE rb_insert (
                 u8 UInt8, i64 Int64, f Float64, s String, fs FixedString(4),
                 d Date, dttm DateTime('UTC'),
@@ -1588,7 +1606,8 @@ class TestRowBinary:
                 e Enum8('a' = 1, 'b' = 2), arr Array(UInt8),
                 m Map(String, UInt8), nn Nullable(UInt8), tup Tuple(UInt8, String)
             ) ENGINE = Memory
-            """)
+            """
+        )
         row = (
             7,
             -5,
@@ -1596,8 +1615,8 @@ class TestRowBinary:
             "hi",
             "abcd",
             dt.date(2021, 5, 6),
-            dt.datetime(2021, 5, 6, 7, 8, 9),
-            dt.datetime(2021, 5, 6, 10, 8, 9, 123000),
+            dt.datetime(2021, 5, 6, 7, 8, 9, tzinfo=ZoneInfo("UTC")),
+            dt.datetime(2021, 5, 6, 10, 8, 9, 123000, tzinfo=MOSCOW),
             Decimal("12.3456"),
             UUID("1ea47c97-16a8-4338-877e-66f464374944"),
             IPv4Address("1.2.3.4"),
@@ -1628,6 +1647,96 @@ class TestRowBinary:
             3,
         )
         await binary.execute("DROP TABLE IF EXISTS rb_insert_cols")
+
+
+class TestDateTimeTimezone:
+    # https://github.com/maximdanilchenko/aiochclient/issues/136
+    # A DateTime('TZ') / DateTime64(P, 'TZ') column decodes to a tz-aware
+    # datetime in the column zone; a timezone-less column stays naive. On
+    # INSERT every engine accepts naive (column wall-clock) and aware (any
+    # zone) values alike.
+    DDL = """
+        CREATE TABLE dt_tz (
+            d DateTime('Europe/Moscow'), d64 DateTime64(3, 'Europe/Moscow'),
+            n DateTime, n64 DateTime64(3), nd Nullable(DateTime64(3, 'UTC')),
+            arr Array(DateTime64(6, 'UTC'))
+        ) ENGINE = Memory
+        """
+
+    @pytest.fixture(params=["tsv", "binary", "native"])
+    async def writer(self, chclient, request):
+        ch = ChClient(
+            chclient._http_client._session,
+            **({} if request.param == "tsv" else {request.param: True}),
+        )
+        await ch.execute("DROP TABLE IF EXISTS dt_tz")
+        await ch.execute(self.DDL)
+        yield ch
+        await ch.execute("DROP TABLE IF EXISTS dt_tz")
+
+    @pytest.fixture
+    def readers(self, chclient):
+        session = chclient._http_client._session
+        return {
+            "tsv": chclient,
+            "binary": ChClient(session, binary=True),
+            "native": ChClient(session, native=True),
+        }
+
+    async def test_round_trip(self, writer, readers):
+        instant = dt.datetime(2021, 3, 28, 1, 30, 45, 123000, tzinfo=dt.timezone.utc)
+        naive = dt.datetime(2021, 3, 28, 1, 30, 45, 123000)
+        # DateTime (no 64) keeps whole seconds only.
+        instant_s, naive_s = instant.replace(microsecond=0), naive.replace(
+            microsecond=0
+        )
+        await writer.execute(
+            "INSERT INTO dt_tz VALUES",
+            (instant, instant, instant, instant, None, [instant, naive]),
+            (naive, naive, naive, naive, naive, []),
+        )
+        # The server sees the very instants that were sent.
+        stamps = await writer.fetch(
+            "SELECT toUnixTimestamp(d), toUnixTimestamp64Milli(d64),"
+            " toUnixTimestamp(n), toUnixTimestamp64Milli(n64) FROM dt_tz ORDER BY d"
+        )
+        # Naive 01:30 Moscow is 22:30 UTC the day before, so it sorts first.
+        assert [r[:] for r in stamps] == [
+            (
+                int(naive.replace(tzinfo=MOSCOW).timestamp()),
+                int(naive.replace(tzinfo=MOSCOW).timestamp() * 1000),
+                int(naive.replace(tzinfo=dt.timezone.utc).timestamp()),
+                int(naive.replace(tzinfo=dt.timezone.utc).timestamp() * 1000),
+            ),
+            (
+                int(instant.timestamp()),
+                int(instant.timestamp() * 1000),
+                int(instant.timestamp()),
+                int(instant.timestamp() * 1000),
+            ),
+        ]
+        for engine, ch in readers.items():
+            rows = await ch.fetch("SELECT * FROM dt_tz ORDER BY d")
+            wall, aware = rows[0], rows[1]
+            # aware == aware compares instants, whatever the zone.
+            assert aware["d64"] == instant, engine
+            assert aware["d64"].tzinfo.key == "Europe/Moscow", engine
+            assert aware["n"] == naive_s, engine
+            assert aware["n"].tzinfo is None, engine
+            assert aware["n64"] == naive and aware["n64"].tzinfo is None, engine
+            assert aware["nd"] is None, engine
+            assert aware["arr"] == [instant, naive.replace(tzinfo=dt.timezone.utc)]
+            assert aware["arr"][0].tzinfo.key == "UTC", engine
+            assert wall["d64"] == naive.replace(tzinfo=MOSCOW), engine
+            assert wall["nd"] == naive.replace(tzinfo=dt.timezone.utc), engine
+            if engine == "native":
+                # ClickHouse's Native header drops the zone of a DateTime('TZ')
+                # column, so it can only be decoded as naive UTC there.
+                assert aware["d"] == instant_s.replace(tzinfo=None), engine
+            else:
+                assert aware["d"] == instant_s, engine
+                assert aware["d"].tzinfo.key == "Europe/Moscow", engine
+                assert wall["d"] == naive_s.replace(tzinfo=MOSCOW), engine
 
 
 @pytest.mark.usefixtures("class_chclient")
