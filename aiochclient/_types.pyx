@@ -11,18 +11,12 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
+from cpython.datetime cimport date, date_new, datetime, datetime_new, import_datetime
 from cpython.list cimport PyList_GET_ITEM, PyList_GET_SIZE
+from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM
-from cpython.datetime cimport (
-    date,
-    date_new,
-    datetime,
-    datetime_new,
-    import_datetime,
-)
 from cpython.unicode cimport PyUnicode_DecodeUTF8
-from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -216,6 +210,21 @@ cdef class Cursor:
 RB_EPOCH_DATE = _dt.date(1970, 1, 1)
 RB_EPOCH_DATETIME = _dt.datetime(1970, 1, 1)
 RB_EPOCH_UTC = _dt.datetime(1970, 1, 1, tzinfo=_dt.timezone.utc)
+_MICROSECOND = _dt.timedelta(microseconds=1)
+
+
+cpdef object to_epoch_micros(object value, object zone):
+    """Microseconds since the epoch for a naive or aware ``value``.
+
+    Naive + column zone -> wall-clock in that zone. Naive + no zone -> UTC
+    wall-clock (the historical behaviour). Aware -> its real instant, whatever
+    the column zone is.
+    """
+    if value.tzinfo is None:
+        if zone is None:
+            return (value - RB_EPOCH_DATETIME) // _MICROSECOND
+        value = value.replace(tzinfo=zone)
+    return (value - RB_EPOCH_UTC) // _MICROSECOND
 _TZ_UNSET = object()
 
 
@@ -884,12 +893,14 @@ cdef class DateTimeType(_RBType):
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return datetime_parse(string)
+            value = datetime_parse(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":
                 return None
             raise
+        zone = self._zone()
+        return value.replace(tzinfo=zone) if zone else value
 
     cpdef object p_type(self, str string):
         return self._convert(string)
@@ -902,14 +913,10 @@ cdef class DateTimeType(_RBType):
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + _dt.timedelta(seconds=seconds)
-        return _dt.datetime.fromtimestamp(seconds, zone).replace(tzinfo=None)
+        return _dt.datetime.fromtimestamp(seconds, zone)
 
     cpdef bytes write(self, value):
-        zone = self._zone()
-        if zone is None:
-            seconds = (value - RB_EPOCH_DATETIME) // _dt.timedelta(seconds=1)
-        else:
-            seconds = int(value.replace(tzinfo=zone).timestamp())
+        seconds = to_epoch_micros(value, self._zone()) // 1_000_000
         return int(seconds).to_bytes(4, "little")
 
 
@@ -937,12 +944,14 @@ cdef class DateTime64Type(_RBType):
     cdef object _convert(self, str string):
         string = string.strip("'")
         try:
-            return datetime_parse_f(string)
+            value = datetime_parse_f(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00.000
             if string == "0000-00-00 00:00:00.000":
                 return None
             raise
+        zone = self._zone()
+        return value.replace(tzinfo=zone) if zone else value
 
     cpdef object p_type(self, str string):
         return self._convert(string)
@@ -959,18 +968,10 @@ cdef class DateTime64Type(_RBType):
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + _dt.timedelta(microseconds=micros)
-        return (RB_EPOCH_UTC + _dt.timedelta(microseconds=micros)).astimezone(
-            zone
-        ).replace(tzinfo=None)
+        return (RB_EPOCH_UTC + _dt.timedelta(microseconds=micros)).astimezone(zone)
 
     cpdef bytes write(self, value):
-        zone = self._zone()
-        if zone is None:
-            micros = (value - RB_EPOCH_DATETIME) // _dt.timedelta(microseconds=1)
-        else:
-            micros = (value.replace(tzinfo=zone) - RB_EPOCH_UTC) // _dt.timedelta(
-                microseconds=1
-            )
+        micros = to_epoch_micros(value, self._zone())
         if self._precision <= 6:
             ticks = micros // 10 ** (6 - self._precision)
         else:

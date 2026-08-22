@@ -144,6 +144,22 @@ RB_INT_SPECS = {
 # Epoch used to turn day/second/tick offsets into python date/datetime objects.
 RB_EPOCH_DATE = dt.date(1970, 1, 1)
 RB_EPOCH_DATETIME = dt.datetime(1970, 1, 1)
+RB_EPOCH_UTC = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+_MICROSECOND = dt.timedelta(microseconds=1)
+
+
+def to_epoch_micros(value: dt.datetime, zone) -> int:
+    """Microseconds since the epoch for a naive or aware ``value``.
+
+    Naive + column zone -> wall-clock in that zone. Naive + no zone -> UTC
+    wall-clock (the historical behaviour). Aware -> its real instant, whatever
+    the column zone is.
+    """
+    if value.tzinfo is None:
+        if zone is None:
+            return (value - RB_EPOCH_DATETIME) // _MICROSECOND
+        value = value.replace(tzinfo=zone)
+    return (value - RB_EPOCH_UTC) // _MICROSECOND
 
 
 def write_varint(value: int) -> bytes:
@@ -455,12 +471,14 @@ class DateTimeType(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return datetime_parse(string)
+            value = datetime_parse(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00":
                 return None
             raise
+        zone = self._zone()
+        return value.replace(tzinfo=zone) if zone else value
 
     def convert(self, value: bytes) -> Optional[dt.datetime]:
         return self.p_type(value.decode())
@@ -470,24 +488,18 @@ class DateTimeType(BaseType):
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + dt.timedelta(seconds=seconds)
-        # Match the server's TSV output: wall-clock in the column timezone.
-        return dt.datetime.fromtimestamp(seconds, zone).replace(tzinfo=None)
+        return dt.datetime.fromtimestamp(seconds, zone)
 
     def write(self, value: dt.datetime) -> bytes:
-        zone = self._zone()
-        if zone is None:
-            seconds = (value - RB_EPOCH_DATETIME) // dt.timedelta(seconds=1)
-        else:
-            # ``value`` is naive wall-clock in the column timezone.
-            seconds = int(value.replace(tzinfo=zone).timestamp())
+        seconds = to_epoch_micros(value, self._zone()) // 1_000_000
         return seconds.to_bytes(4, "little")
 
     @staticmethod
     def unconvert(value: dt.datetime) -> bytes:
-        if value.microsecond != 0:
-            # In case of 0000-00-00 00:00:00.000 (datetime64)
-            return b"%a" % dt.datetime.strftime(value, '%Y-%m-%d %H:%M:%S.%f')
-        return b"%a" % dt.datetime.strftime(value, '%Y-%m-%d %H:%M:%S')
+        # str() keeps the sub-second part only when present (a DateTime column
+        # rejects it) and the UTC offset of an aware value, which ClickHouse
+        # applies. Same as the compiled ``unconvert_datetime``.
+        return b"'%s'" % str(value).encode()
 
 
 class DateTime64Type(BaseType):
@@ -506,12 +518,14 @@ class DateTime64Type(BaseType):
     def p_type(self, string: str):
         string = string.strip("'")
         try:
-            return datetime_parse_f(string)
+            value = datetime_parse_f(string)
         except ValueError:
             # In case of 0000-00-00 00:00:00
             if string == "0000-00-00 00:00:00.000":
                 return None
             raise
+        zone = self._zone()
+        return value.replace(tzinfo=zone) if zone else value
 
     def convert(self, value: bytes) -> Optional[dt.datetime]:
         return self.p_type(value.decode())
@@ -526,25 +540,10 @@ class DateTime64Type(BaseType):
         zone = self._zone()
         if zone is None:
             return RB_EPOCH_DATETIME + dt.timedelta(microseconds=micros)
-        # Match the server's TSV output: wall-clock in the column timezone.
-        return (
-            (
-                dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
-                + dt.timedelta(microseconds=micros)
-            )
-            .astimezone(zone)
-            .replace(tzinfo=None)
-        )
+        return (RB_EPOCH_UTC + dt.timedelta(microseconds=micros)).astimezone(zone)
 
     def write(self, value: dt.datetime) -> bytes:
-        zone = self._zone()
-        if zone is None:
-            micros = (value - RB_EPOCH_DATETIME) // dt.timedelta(microseconds=1)
-        else:
-            aware = value.replace(tzinfo=zone)
-            micros = (
-                aware - dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
-            ) // dt.timedelta(microseconds=1)
+        micros = to_epoch_micros(value, self._zone())
         if self._precision <= 6:
             ticks = micros // 10 ** (6 - self._precision)
         else:
