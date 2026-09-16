@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 import aiohttp
 import httpx
+import httpx2
 import pytest
 
 from aiochclient import ChClient, ChClientError
@@ -142,7 +143,7 @@ def rows(uuid):
     ]
 
 
-@pytest.fixture(params=[aiohttp.ClientSession, httpx.AsyncClient])
+@pytest.fixture(params=[aiohttp.ClientSession, httpx.AsyncClient, httpx2.AsyncClient])
 def http_client(request):
     return request.param
 
@@ -1884,6 +1885,20 @@ class TestErrorBody:
         assert str(exc.value).strip()
         assert "502" in str(exc.value)
 
+    async def test_httpx2_empty_error_body(self):
+        from aiochclient.http_clients import httpx2 as httpx2_client
+
+        class _FakeResp:
+            status_code = 502
+
+            async def aread(self):
+                return b"   "
+
+        with pytest.raises(ChClientError) as exc:
+            await httpx2_client._check_response(_FakeResp())
+        assert str(exc.value).strip()
+        assert "502" in str(exc.value)
+
 
 class TestExceptionTrailer:
     # https://github.com/maximdanilchenko/aiochclient/issues/93
@@ -1944,6 +1959,21 @@ class TestExceptionTrailer:
         assert await self._collect(client) == [b"a\n", b"String\n", b"x\n", b"y\n"]
 
         client = HttpxHttpClient(
+            _FakeHttpxSession(200, self.ERR_HEADERS, self.ERR_BODY)
+        )
+        with pytest.raises(ChClientError) as exc:
+            await self._collect(client)
+        assert "TIMEOUT_EXCEEDED" in str(exc.value)
+
+    async def test_httpx2_trailer_stops_stream(self):
+        # httpx2's response/session shape is identical to httpx's, so the
+        # same fake doubles apply here.
+        from aiochclient.http_clients.httpx2 import Httpx2HttpClient
+
+        client = Httpx2HttpClient(_FakeHttpxSession(200, {}, self.OK_BODY))
+        assert await self._collect(client) == [b"a\n", b"String\n", b"x\n", b"y\n"]
+
+        client = Httpx2HttpClient(
             _FakeHttpxSession(200, self.ERR_HEADERS, self.ERR_BODY)
         )
         with pytest.raises(ChClientError) as exc:

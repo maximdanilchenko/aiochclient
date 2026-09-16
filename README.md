@@ -23,9 +23,10 @@ fully typed interface.
 
 ## Installation
 
-You can use it with either
-[aiohttp](https://github.com/aio-libs/aiohttp) or
-[httpx](https://github.com/encode/httpx) http connectors.
+You can use it with
+[aiohttp](https://github.com/aio-libs/aiohttp),
+[httpx](https://github.com/encode/httpx), or
+[httpx2](https://github.com/pydantic/httpx2) http connectors.
 
 To use with `aiohttp` install it with command:
 
@@ -43,12 +44,20 @@ To use with `httpx` install it with command:
 
 Or `aiochclient[httpx-speedups]` to install with extra speedups.
 
+To use with `httpx2` install it with command:
+
+```
+> pip install aiochclient[httpx2]
+```
+
+Or `aiochclient[httpx2-speedups]` to install with extra speedups.
+
 Installing with `[*-speedups]` adds the following:
 
 - [faust-cchardet](https://pypi.org/project/faust-cchardet/) for `aiohttp` speedup
 - [aiodns](https://pypi.org/project/aiodns/) for `aiohttp` speedup
 - [ciso8601](https://github.com/closeio/ciso8601) for ultra-fast datetime
-  parsing while decoding data from ClickHouse for `aiohttp` and `httpx`.
+  parsing while decoding data from ClickHouse for `aiohttp`, `httpx` and `httpx2`.
 
 Additionally the installation process attempts to use Cython for a speed boost
 (roughly 30% faster).
@@ -57,7 +66,7 @@ Additionally the installation process attempts to use Cython for a speed boost
 
 ### Connecting to ClickHouse
 
-`aiochclient` needs `aiohttp.ClientSession` or `httpx.AsyncClient` to connect to ClickHouse:
+`aiochclient` needs `aiohttp.ClientSession`, `httpx.AsyncClient` or `httpx2.AsyncClient` to connect to ClickHouse:
 
 ```python
 from aiochclient import ChClient

@@ -81,6 +81,9 @@ setup_opts = dict(
         # httpx client
         'httpx': ['httpx>=0.27'],
         'httpx-speedups': ['ciso8601>=2.3.0', 'httpx>=0.27'],
+        # httpx2 client
+        'httpx2': ['httpx2>=2.0'],
+        'httpx2-speedups': ['ciso8601>=2.3.0', 'httpx2>=2.0'],
     },
     cmdclass=dict(build_ext=ve_build_ext),
 )

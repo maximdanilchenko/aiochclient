@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+New:
+- `httpx2` support, alongside the existing `aiohttp` and `httpx` connectors
+  (`aiochclient[httpx2]` / `aiochclient[httpx2-speedups]`). `choose_http_client()`
+  now also recognizes an `httpx2.AsyncClient` session.
+
 Performance (Native engine):
 - **SELECT ~1M rows/sec**: the cyclic GC is suppressed while a fetch allocates
   its result objects (none are garbage, they are all returned), and rows are

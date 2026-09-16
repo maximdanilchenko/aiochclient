@@ -82,4 +82,15 @@ class HttpClientABC(ABC):
                 return HttpxHttpClient
         except ImportError:
             pass
-        raise ChClientError('Async http client heeded. Please install aiohttp or httpx')
+        try:
+            import httpx2
+
+            if session is None or isinstance(session, httpx2.AsyncClient):
+                from aiochclient.http_clients.httpx2 import Httpx2HttpClient
+
+                return Httpx2HttpClient
+        except ImportError:
+            pass
+        raise ChClientError(
+            'Async http client heeded. Please install aiohttp, httpx or httpx2'
+        )

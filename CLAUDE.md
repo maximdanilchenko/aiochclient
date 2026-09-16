@@ -28,12 +28,13 @@ The package lives in `aiochclient/`:
   size; 0 = single atomic block). Public methods: `execute`, `fetch`, `fetchrow`, `fetchval`,
   `iterate`, `insert_file`, `is_alive`, `close`. `fetchone`/`cursor` are deprecated aliases.
 - **`http_clients/`** — pluggable HTTP backend behind `HttpClientABC` (`abc.py`).
-  `choose_http_client()` auto-detects whether the passed session is an `aiohttp.ClientSession`
-  or `httpx.AsyncClient` and returns the matching impl (`aiohttp.py` / `httpx.py`). Both
-  implement `get` / `post_return_lines` (streaming line generator, TSV/JSON) /
-  `post_return_bytes` (streaming byte-chunk generator, RowBinary/Native) / `post_no_return`
-  (also accepts an async-generator body for streamed Native INSERT) / `close`. Non-200
-  responses raise `ChClientError`.
+  `choose_http_client()` auto-detects whether the passed session is an `aiohttp.ClientSession`,
+  `httpx.AsyncClient` or `httpx2.AsyncClient` and returns the matching impl (`aiohttp.py` /
+  `httpx.py` / `httpx2.py`). All three implement `get` / `post_return_lines` (streaming line
+  generator, TSV/JSON) / `post_return_bytes` (streaming byte-chunk generator, RowBinary/Native)
+  / `post_no_return` (also accepts an async-generator body for streamed Native INSERT) /
+  `close`. Non-200 responses raise `ChClientError`. `httpx2.py` mirrors `httpx.py` exactly
+  (httpx2 is API-compatible with httpx) — keep the two in sync.
 - **`types.py`** — pure-Python type conversion (the TSV engine and the per-value binary
   read/write primitives). `BaseType` subclasses (one per ClickHouse type) implement `convert`
   (CH bytes → Python), `unconvert` (Python → CH text), and the RowBinary `read`/`write`.
@@ -107,7 +108,8 @@ supported Python is 3.10 (`python_requires` in `setup.py`).
   `faust-cchardet` (aiohttp), and the compiled Cython extension. Code must work without any
   of them — always provide a pure-Python fallback path (see the `try/except ImportError`
   blocks).
-- Install targets: `aiochclient[aiohttp]`, `aiochclient[httpx]`, and their `*-speedups` variants.
+- Install targets: `aiochclient[aiohttp]`, `aiochclient[httpx]`, `aiochclient[httpx2]`, and
+  their `*-speedups` variants.
 
 ## Gotchas
 
