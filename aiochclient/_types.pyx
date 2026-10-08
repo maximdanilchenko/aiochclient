@@ -11,18 +11,12 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from cpython cimport PyList_Append, PyUnicode_AsEncodedString, PyUnicode_Join
+from cpython.datetime cimport date, date_new, datetime, datetime_new, import_datetime
 from cpython.list cimport PyList_GET_ITEM, PyList_GET_SIZE
+from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from cpython.ref cimport Py_INCREF
 from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM
-from cpython.datetime cimport (
-    date,
-    date_new,
-    datetime,
-    datetime_new,
-    import_datetime,
-)
 from cpython.unicode cimport PyUnicode_DecodeUTF8
-from cpython.mem cimport PyMem_Free, PyMem_Malloc
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -36,6 +30,7 @@ from libc.stdint cimport (
 from libc.string cimport memcpy
 
 from aiochclient.exceptions import ChClientError, NeedMoreData
+from aiochclient.types import BaseType, _tuple_element_type
 
 import_datetime()
 
@@ -990,7 +985,8 @@ cdef class TupleType(_RBType):
         self.container = container
         cdef str tps = RE_TUPLE.findall(name)[0]
         self.types = tuple(
-            what_py_type(tp.rpartition(" ")[2], container=True) for tp in tps.split(",")
+            what_py_type(_tuple_element_type(tp), container=True)
+            for tp in BaseType.seq_parser(tps, type_decl=True)
         )
 
     cdef tuple _convert(self, str string):

@@ -650,6 +650,76 @@ class TestTypes:
         assert record[0] == result
         assert record["tuple"] == result
 
+    @pytest.mark.parametrize(
+        "query, expected",
+        [
+            (
+                "SELECT tuple(toInt32(1), tuple(toInt32(2), toInt32(3)))",
+                (1, (2, 3)),
+            ),
+            (
+                "SELECT tuple(tuple(toInt32(1), toInt32(2)), toInt32(3))",
+                ((1, 2), 3),
+            ),
+            (
+                "SELECT tuple(toDecimal32(1.25, 2), toString('x'))",
+                (Decimal('1.25'), 'x'),
+            ),
+            (
+                "SELECT CAST(((1, 2), 3), "
+                "'Tuple(pair Tuple(x Int32, y Int32), value Int32)')",
+                ((1, 2), 3),
+            ),
+            (
+                "SELECT CAST((1.25, 2), "
+                "'Tuple(`amount (USD` Decimal(9, 2), `other value` Int32)')",
+                (Decimal('1.25'), 2),
+            ),
+            (
+                "SELECT tuple(CAST('a) b, c' AS "
+                "Enum8('a) b, c' = 1, 'd' = 2)), toInt32(1))",
+                ('a) b, c', 1),
+            ),
+            (
+                "SELECT tuple(toDateTime64('2024-01-01 00:00:00', 3, 'UTC'), "
+                "toInt32(1))",
+                (dt.datetime(2024, 1, 1), 1),
+            ),
+        ],
+        ids=[
+            'nested-last',
+            'nested-first',
+            'decimal',
+            'named-nested',
+            'quoted-names',
+            'enum-punctuation',
+            'timezone',
+        ],
+    )
+    async def test_nested_tuple_types(self, query, expected):
+        assert await self.engine_ch.fetchval(query) == expected
+
+    async def test_nested_tuple_insert(self):
+        await self.ch.execute("DROP TABLE IF EXISTS nested_tuple_roundtrip")
+        await self.ch.execute(
+            "CREATE TABLE nested_tuple_roundtrip "
+            "(value Tuple(inner Tuple(Int32, Int32), "
+            "`amount (USD` Decimal(9, 2))) ENGINE = Memory"
+        )
+        value = ((1, 2), Decimal('1.25'))
+        try:
+            await self.engine_ch.execute(
+                "INSERT INTO nested_tuple_roundtrip VALUES", (value,)
+            )
+            assert (
+                await self.engine_ch.fetchval(
+                    "SELECT value FROM nested_tuple_roundtrip"
+                )
+                == value
+            )
+        finally:
+            await self.ch.execute("DROP TABLE IF EXISTS nested_tuple_roundtrip")
+
     async def test_map(self):
         result = {"hello": "world {' and other things"}
         assert await self.select_field("map") == result

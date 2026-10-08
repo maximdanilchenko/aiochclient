@@ -1,15 +1,14 @@
 from collections.abc import Mapping
 from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
+from aiochclient.types import BaseType
+
 # Optional cython extension. When available it also provides a compiled Record
 # (much cheaper to instantiate) and the matching ``record_from_decoded`` factory.
 try:
-    from aiochclient._types import (
-        Record,
-        empty_convertor,
-        record_new as record_from_decoded,
-        what_py_converter,
-    )
+    from aiochclient._types import Record, empty_convertor
+    from aiochclient._types import record_new as record_from_decoded
+    from aiochclient._types import what_py_converter
 except ImportError:
     from aiochclient.types import empty_convertor, what_py_converter
 
@@ -110,7 +109,8 @@ class RecordsFabric:
         self.names = {key: index for (index, key) in enumerate(names)}
         if convert:
             self.converters = [
-                what_py_converter(tp) for tp in tps.decode().strip().split("\t")
+                what_py_converter(BaseType.decode(tp))
+                for tp in tps.strip().split(b"\t")
             ]
         else:
             self.converters = [

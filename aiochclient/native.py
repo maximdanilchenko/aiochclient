@@ -18,14 +18,10 @@ from ipaddress import IPv4Address, IPv6Address
 from typing import AsyncGenerator
 from uuid import UUID
 
-from aiochclient.binary import (
-    BinaryReader,
-    read_binary_str,
-    read_column,
-    what_py_type,
-)
+from aiochclient.binary import BinaryReader, read_binary_str, read_column, what_py_type
 from aiochclient.exceptions import ChClientError, NeedMoreData
 from aiochclient.records import Record, record_from_decoded
+from aiochclient.types import BaseType, _tuple_element_type
 
 # Use the compiled Cursor (with bulk column reads) when available.
 try:
@@ -94,56 +90,11 @@ _LC_INDEX_TYPE = {0: "UInt8", 1: "UInt16", 2: "UInt32", 3: "UInt64"}
 
 
 def _split_args(spec):
-    """Split a comma-separated type-argument list at the top level.
-
-    Commas inside nested parentheses or single-quoted literals (e.g. an
-    ``Enum8('a'=1,'b'=2)`` element) are not split points.
-    """
-    parts = []
-    depth = 0
-    in_quote = False
-    start = 0
-    i = 0
-    length = len(spec)
-    while i < length:
-        ch = spec[i]
-        if in_quote:
-            if ch == "\\":
-                i += 2
-                continue
-            if ch == "'":
-                in_quote = False
-        elif ch == "'":
-            in_quote = True
-        elif ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-        elif ch == "," and depth == 0:
-            parts.append(spec[start:i].strip())
-            start = i + 1
-        i += 1
-    parts.append(spec[start:].strip())
-    return parts
+    return [arg.strip() for arg in BaseType.seq_parser(spec, type_decl=True)]
 
 
 def _element_type(spec):
-    """Strip an optional leading ``name `` from a (possibly named) Tuple element."""
-    depth = 0
-    in_quote = False
-    for i, ch in enumerate(spec):
-        if in_quote:
-            if ch == "'":
-                in_quote = False
-        elif ch == "'":
-            in_quote = True
-        elif ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-        elif ch == " " and depth == 0:
-            return spec[i + 1 :].strip()
-    return spec
+    return _tuple_element_type(spec)
 
 
 def _read_prefix(cursor, ctype):

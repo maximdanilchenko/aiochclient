@@ -259,7 +259,9 @@ class BaseType(ABC):
         return d.decode()
 
     @classmethod
-    def seq_parser(cls, raw: str) -> Generator[str, None, None]:
+    def seq_parser(
+        cls, raw: str, type_decl: bool = False
+    ) -> Generator[str, None, None]:
         """
         Generator for parsing the body of tuples, arrays and maps.
 
@@ -272,20 +274,20 @@ class BaseType(ABC):
             return
         cur = []
         depth = 0
-        in_str = False
+        quote = None
         escape_char = False
         for sym in raw:
-            if in_str:
+            if quote is not None:
                 cur.append(sym)
                 if escape_char:
                     escape_char = False
                 elif sym == cls.ESCAPE_OP:
                     escape_char = True
-                elif sym == cls.DQ:
-                    in_str = False
+                elif sym == quote:
+                    quote = None
                 continue
-            if sym == cls.DQ:
-                in_str = True
+            if sym == cls.DQ or (type_decl and sym == "`"):
+                quote = sym
             elif sym == cls.ARR_OP or sym == cls.TUP_OP:
                 depth += 1
             elif sym == cls.ARR_CLS or sym == cls.TUP_CLS:
@@ -616,6 +618,10 @@ class IPv6Type(BaseType):
         return b"%a" % str(value)
 
 
+def _tuple_element_type(spec: str) -> str:
+    return re.sub(r"^(?:\w+|`(?:[^`\\]|\\.)*`)\s+", "", spec.strip())
+
+
 class TupleType(BaseType):
     __slots__ = ("name", "types")
 
@@ -623,13 +629,13 @@ class TupleType(BaseType):
         super().__init__(name, **kwargs)
         tps = RE_TUPLE.findall(name)[0]
         self.types = tuple(
-            what_py_type(tp.rpartition(" ")[2], container=True) for tp in tps.split(",")
+            what_py_type(_tuple_element_type(tp), container=True)
+            for tp in self.seq_parser(tps, type_decl=True)
         )
 
     def p_type(self, string: str) -> tuple:
         return tuple(
-            tp.p_type(val)
-            for tp, val in zip(self.types, self.seq_parser(string.strip("()")))
+            tp.p_type(val) for tp, val in zip(self.types, self.seq_parser(string[1:-1]))
         )
 
     def convert(self, value: bytes) -> list:
