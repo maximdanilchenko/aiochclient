@@ -1164,14 +1164,20 @@ class TestFetching:
         exists = await self.ch.fetchrow("EXISTS TABLE all_types")
         assert exists == {'result': 1}
 
-    async def test_explain_with_fetch(self):
+    @pytest.mark.parametrize('decode', [True, False])
+    async def test_explain_with_fetch(self, decode):
         # https://github.com/maximdanilchenko/aiochclient/issues/98
-        rows = await self.ch.fetch("EXPLAIN SELECT 1")
+        rows = await self.ch.fetch("EXPLAIN SELECT 1", decode=decode)
         assert rows
-        assert all(isinstance(row[0], str) for row in rows)
+        assert all(len(row) == 1 for row in rows)
+        assert all(isinstance(row[0], str if decode else bytes) for row in rows)
 
-        value = await self.ch.fetchval("EXPLAIN SYNTAX SELECT 1 + 1")
-        assert value == "SELECT 1 + 1"
+        query = "EXPLAIN SYNTAX SELECT 1 + 1"
+        expected = (await self.ch.fetch(query, json=True))[0]['explain']
+        value = await self.ch.fetchval(query, decode=decode)
+        assert value == (
+            expected if decode else expected.encode().replace(b'\n', b'\\n')
+        )
 
     async def test_quoted_string(self):
         record = await self.ch.fetchrow("SELECT 'foo\\'bar' AS quoted_string")

@@ -275,7 +275,15 @@ class ChClient:
                     convert=decode,
                 )
                 async for line in response:
-                    yield rf.new(line)
+                    # Blank EXPLAIN strings share the TSV encoding of WITH TOTALS separators.
+                    if (
+                        statement_type == 'EXPLAIN'
+                        and len(rf.names) == 1
+                        and line == b'\n'
+                    ):
+                        yield Record.from_decoded(('' if decode else b'',), rf.names)
+                    else:
+                        yield rf.new(line)
         else:
             await self._http_client.post_no_return(
                 url=self.url, params=params, headers=self.headers, data=data
